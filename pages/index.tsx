@@ -372,9 +372,9 @@ export default function Home() {
                   <p className="text-xl font-bold text-purple-900">${(result.actual.needs.total + result.actual.wants.total).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Amount Needed from Next Paycheck</p>
+                  <p className="text-sm text-gray-600">Hours Needed to Work</p>
                   <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > result.actual.savings.total ? 'text-red-600' : 'text-green-600'}`}>
-                    ${Math.max(0, parseFloat(form.goalTarget) - result.actual.savings.total).toFixed(2)}
+                    {Math.ceil(Math.max(0, parseFloat(form.goalTarget) - result.actual.savings.total) / 14)} hours
                   </p>
                 </div>
               </div>
