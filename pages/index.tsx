@@ -6,6 +6,7 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function Home() {
   const [form, setForm] = useState({
+    date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     totalMoney: "",
     paycheck: "",
     // Needs categories
@@ -74,15 +75,21 @@ export default function Home() {
     });
   };
 
-  const getDifferenceColor = (diff: number) => {
-    if (diff > 0) return "text-green-600";
-    if (diff < 0) return "text-red-600";
-    return "text-gray-600";
+  const getDifferenceColor = (diff: number, category: 'needs' | 'wants' | 'savings') => {
+    if (category === 'savings') {
+      // For savings, positive is good (saving more than suggested)
+      return diff > 0 ? "text-green-600" : "text-red-600";
+    } else {
+      // For needs and wants, negative is good (spending less than suggested)
+      return diff < 0 ? "text-green-600" : "text-red-600";
+    }
   };
 
-  const formatDifference = (diff: number) => {
-    const prefix = diff > 0 ? "+" : "";
-    return `${prefix}$${diff.toFixed(2)}`;
+  const formatDifference = (diff: number, category: 'needs' | 'wants' | 'savings') => {
+    const prefix = category === 'savings' 
+      ? (diff > 0 ? "+" : "")
+      : (diff < 0 ? "+" : "");
+    return `${prefix}$${Math.abs(diff).toFixed(2)}`;
   };
 
   const categories = {
@@ -179,6 +186,17 @@ export default function Home() {
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
       <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-sm">
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Budget Date</label>
+            <input
+              type="date"
+              name="date"
+              value={form.date}
+              onChange={handleChange}
+              className="w-full p-2 border border-gray-300 rounded"
+              required
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Current Total Money</label>
             <input
@@ -278,8 +296,23 @@ export default function Home() {
       {result && (
         <div className="mt-6 p-4 border rounded shadow w-full max-w-4xl bg-white">
           <div className="mb-4 p-3 bg-blue-50 rounded">
-            <h3 className="font-medium text-blue-800">Projected Total After Paycheck</h3>
-            <p className="text-2xl font-bold text-blue-900">${result.projectedTotal.toFixed(2)}</p>
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-medium text-blue-800">Projected Total After Paycheck</h3>
+                <p className="text-2xl font-bold text-blue-900">${result.projectedTotal.toFixed(2)}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Budget Date</p>
+                <p className="font-medium text-blue-800">
+                  {new Date(form.date).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -295,20 +328,20 @@ export default function Home() {
               <ul className="space-y-1">
                 <li className="flex justify-between">
                   <span>Needs Difference:</span>
-                  <span className={getDifferenceColor(result.comparison.needsDiff)}>
-                    {formatDifference(result.comparison.needsDiff)}
+                  <span className={getDifferenceColor(result.comparison.needsDiff, 'needs')}>
+                    {formatDifference(result.comparison.needsDiff, 'needs')}
                   </span>
                 </li>
                 <li className="flex justify-between">
                   <span>Wants Difference:</span>
-                  <span className={getDifferenceColor(result.comparison.wantsDiff)}>
-                    {formatDifference(result.comparison.wantsDiff)}
+                  <span className={getDifferenceColor(result.comparison.wantsDiff, 'wants')}>
+                    {formatDifference(result.comparison.wantsDiff, 'wants')}
                   </span>
                 </li>
                 <li className="flex justify-between">
                   <span>Savings Difference:</span>
-                  <span className={getDifferenceColor(result.comparison.savingsDiff)}>
-                    {formatDifference(result.comparison.savingsDiff)}
+                  <span className={getDifferenceColor(result.comparison.savingsDiff, 'savings')}>
+                    {formatDifference(result.comparison.savingsDiff, 'savings')}
                   </span>
                 </li>
               </ul>
