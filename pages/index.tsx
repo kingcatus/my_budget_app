@@ -8,6 +8,12 @@ export default function Home() {
     savings: "",
   });
 
+  const [result, setResult] = useState<null | {
+    suggested: { needs: number; wants: number; savings: number };
+    actual: { needs: number; wants: number; savings: number };
+    comparison: { needsDiff: number; wantsDiff: number; savingsDiff: number };
+  }>(null);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
@@ -20,9 +26,9 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
+
     const data = await response.json();
-    alert("Budget submitted!");
-    console.log(data);
+    setResult(data);
   };
 
   return (
@@ -48,6 +54,24 @@ export default function Home() {
           Submit Budget
         </button>
       </form>
+
+      {result && (
+        <div className="mt-6 p-4 border rounded shadow w-full max-w-md bg-white">
+          <h2 className="text-xl font-semibold mb-2">Suggested Budget (50/30/20 Rule)</h2>
+          <ul className="space-y-1">
+            <li>🧾 Needs: <strong>${result.suggested.needs.toFixed(2)}</strong></li>
+            <li>🎈 Wants: <strong>${result.suggested.wants.toFixed(2)}</strong></li>
+            <li>💰 Savings: <strong>${result.suggested.savings.toFixed(2)}</strong></li>
+          </ul>
+
+          <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
+          <ul className="space-y-1">
+            <li>Needs Difference: ${result.comparison.needsDiff.toFixed(2)}</li>
+            <li>Wants Difference: ${result.comparison.wantsDiff.toFixed(2)}</li>
+            <li>Savings Difference: ${result.comparison.savingsDiff.toFixed(2)}</li>
+          </ul>
+        </div>
+      )}
     </main>
   );
 }
