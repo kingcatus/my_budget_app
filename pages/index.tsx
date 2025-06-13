@@ -31,6 +31,17 @@ export default function Home() {
     setResult(data);
   };
 
+  const getDifferenceColor = (diff: number) => {
+    if (diff > 0) return "text-green-600";
+    if (diff < 0) return "text-red-600";
+    return "text-gray-600";
+  };
+
+  const formatDifference = (diff: number) => {
+    const prefix = diff > 0 ? "+" : "";
+    return `${prefix}$${diff.toFixed(2)}`;
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
@@ -66,9 +77,24 @@ export default function Home() {
 
           <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
           <ul className="space-y-1">
-            <li>Needs Difference: ${result.comparison.needsDiff.toFixed(2)}</li>
-            <li>Wants Difference: ${result.comparison.wantsDiff.toFixed(2)}</li>
-            <li>Savings Difference: ${result.comparison.savingsDiff.toFixed(2)}</li>
+            <li className="flex justify-between">
+              <span>Needs Difference:</span>
+              <span className={getDifferenceColor(result.comparison.needsDiff)}>
+                {formatDifference(result.comparison.needsDiff)}
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span>Wants Difference:</span>
+              <span className={getDifferenceColor(result.comparison.wantsDiff)}>
+                {formatDifference(result.comparison.wantsDiff)}
+              </span>
+            </li>
+            <li className="flex justify-between">
+              <span>Savings Difference:</span>
+              <span className={getDifferenceColor(result.comparison.savingsDiff)}>
+                {formatDifference(result.comparison.savingsDiff)}
+              </span>
+            </li>
           </ul>
         </div>
       )}
