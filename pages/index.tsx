@@ -9,6 +9,7 @@ export default function Home() {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     totalMoney: "",
     paycheck: "",
+    goalTarget: "", // Add goal target field
     // Needs categories
     food: "",
     rent: "",
@@ -44,7 +45,10 @@ export default function Home() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
+    setForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,6 +286,19 @@ export default function Home() {
                 />
               </div>
             ))}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Weekly Savings Goal
+              </label>
+              <input
+                type="number"
+                name="goalTarget"
+                value={form.goalTarget}
+                onChange={handleChange}
+                placeholder="Enter your target amount for next week"
+                className="w-full p-2 border border-gray-300 rounded"
+              />
+            </div>
           </div>
         </div>
 
@@ -314,6 +331,28 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {form.goalTarget && (
+            <div className="mb-4 p-3 bg-purple-50 rounded">
+              <h3 className="font-medium text-purple-800 mb-2">Weekly Savings Goal Progress</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Target Amount</p>
+                  <p className="text-xl font-bold text-purple-900">${parseFloat(form.goalTarget).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Current Savings</p>
+                  <p className="text-xl font-bold text-purple-900">${result.actual.savings.total.toFixed(2)}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm text-gray-600">Amount Needed by Next Week</p>
+                  <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > result.actual.savings.total ? 'text-red-600' : 'text-green-600'}`}>
+                    ${(parseFloat(form.goalTarget) - result.actual.savings.total).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
