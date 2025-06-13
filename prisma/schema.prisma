@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BudgetEntry {
+  id        Int      @id @default(autoincrement())
+  income    Float
+  needs     Float
+  wants     Float
+  savings   Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
