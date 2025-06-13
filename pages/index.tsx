@@ -60,6 +60,34 @@ export default function Home() {
     const wantsTotal = parseFloat(form.uber) + parseFloat(form.clothes) + parseFloat(form.entertainment);
     const savingsTotal = parseFloat(form.invest) + parseFloat(form.emergency) + parseFloat(form.goals);
 
+    // Calculate suggested budget based on total income
+    const suggested = {
+      needs: {
+        total: totalIncome * 0.5,
+        breakdown: {
+          food: totalIncome * 0.15,      // 15% of income
+          rent: totalIncome * 0.25,      // 25% of income
+          utilities: totalIncome * 0.10   // 10% of income
+        }
+      },
+      wants: {
+        total: totalIncome * 0.3,
+        breakdown: {
+          uber: totalIncome * 0.10,      // 10% of income
+          clothes: totalIncome * 0.10,    // 10% of income
+          entertainment: totalIncome * 0.10 // 10% of income
+        }
+      },
+      savings: {
+        total: totalIncome * 0.2,
+        breakdown: {
+          invest: totalIncome * 0.10,     // 10% of income
+          emergency: totalIncome * 0.05,  // 5% of income
+          goals: totalIncome * 0.05       // 5% of income
+        }
+      }
+    };
+
     const response = await fetch("/api/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -75,6 +103,7 @@ export default function Home() {
     const data = await response.json();
     setResult({
       ...data,
+      suggested,
       projectedTotal: totalIncome
     });
   };
@@ -345,9 +374,9 @@ export default function Home() {
                   <p className="text-xl font-bold text-purple-900">${result.actual.savings.total.toFixed(2)}</p>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-sm text-gray-600">Amount Needed by Next Week</p>
+                  <p className="text-sm text-gray-600">Amount Needed from Next Paycheck</p>
                   <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > result.actual.savings.total ? 'text-red-600' : 'text-green-600'}`}>
-                    ${(parseFloat(form.goalTarget) - result.actual.savings.total).toFixed(2)}
+                    ${Math.max(0, parseFloat(form.goalTarget) - result.actual.savings.total).toFixed(2)}
                   </p>
                 </div>
               </div>
