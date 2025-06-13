@@ -138,8 +138,7 @@ export default function Home() {
     ],
     savings: [
       { name: "invest", label: "Investments" },
-      { name: "emergency", label: "Emergency Fund" },
-      { name: "goals", label: "Financial Goals" }
+      { name: "emergency", label: "Emergency Fund" }
     ]
   };
 
@@ -155,8 +154,7 @@ export default function Home() {
         'Clothing',
         'Entertainment',
         'Investments',
-        'Emergency Fund',
-        'Financial Goals'
+        'Emergency Fund'
       ],
       datasets: [
         {
@@ -168,8 +166,7 @@ export default function Home() {
             result.actual.wants.breakdown.clothes,
             result.actual.wants.breakdown.entertainment,
             result.actual.savings.breakdown.invest,
-            result.actual.savings.breakdown.emergency,
-            result.actual.savings.breakdown.goals
+            result.actual.savings.breakdown.emergency
           ],
           backgroundColor: [
             '#60A5FA', // Food - Light Blue
@@ -179,8 +176,7 @@ export default function Home() {
             '#10B981', // Clothing - Green
             '#059669', // Entertainment - Dark Green
             '#A78BFA', // Investments - Light Purple
-            '#8B5CF6', // Emergency - Purple
-            '#7C3AED'  // Goals - Dark Purple
+            '#8B5CF6'  // Emergency - Purple
           ],
           borderColor: '#ffffff',
           borderWidth: 2,
@@ -373,7 +369,11 @@ export default function Home() {
                   <p className="text-sm text-gray-600">Current Savings</p>
                   <p className="text-xl font-bold text-purple-900">${result.actual.savings.total.toFixed(2)}</p>
                 </div>
-                <div className="col-span-2">
+                <div>
+                  <p className="text-sm text-gray-600">Total Spent This Week</p>
+                  <p className="text-xl font-bold text-purple-900">${(result.actual.needs.total + result.actual.wants.total).toFixed(2)}</p>
+                </div>
+                <div>
                   <p className="text-sm text-gray-600">Amount Needed from Next Paycheck</p>
                   <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > result.actual.savings.total ? 'text-red-600' : 'text-green-600'}`}>
                     ${Math.max(0, parseFloat(form.goalTarget) - result.actual.savings.total).toFixed(2)}
