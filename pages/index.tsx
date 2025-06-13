@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function Home() {
   const [form, setForm] = useState({
@@ -97,6 +101,77 @@ export default function Home() {
       { name: "emergency", label: "Emergency Fund" },
       { name: "goals", label: "Financial Goals" }
     ]
+  };
+
+  const getChartData = () => {
+    if (!result) return null;
+
+    const data = {
+      labels: [
+        'Food & Groceries',
+        'Rent/Mortgage',
+        'Utilities & Bills',
+        'Transportation',
+        'Clothing',
+        'Entertainment',
+        'Investments',
+        'Emergency Fund',
+        'Financial Goals'
+      ],
+      datasets: [
+        {
+          data: [
+            result.actual.needs.breakdown.food,
+            result.actual.needs.breakdown.rent,
+            result.actual.needs.breakdown.utilities,
+            result.actual.wants.breakdown.uber,
+            result.actual.wants.breakdown.clothes,
+            result.actual.wants.breakdown.entertainment,
+            result.actual.savings.breakdown.invest,
+            result.actual.savings.breakdown.emergency,
+            result.actual.savings.breakdown.goals
+          ],
+          backgroundColor: [
+            '#60A5FA', // Food - Light Blue
+            '#3B82F6', // Rent - Blue
+            '#2563EB', // Utilities - Dark Blue
+            '#34D399', // Transportation - Light Green
+            '#10B981', // Clothing - Green
+            '#059669', // Entertainment - Dark Green
+            '#A78BFA', // Investments - Light Purple
+            '#8B5CF6', // Emergency - Purple
+            '#7C3AED'  // Goals - Dark Purple
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        },
+      ],
+    };
+
+    const options = {
+      plugins: {
+        legend: {
+          position: 'right' as const,
+          labels: {
+            font: {
+              size: 12
+            }
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context: any) {
+              const value = context.raw;
+              const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+              const percentage = ((value / total) * 100).toFixed(1);
+              return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+            }
+          }
+        }
+      }
+    };
+
+    return { data, options };
   };
 
   return (
@@ -201,40 +276,52 @@ export default function Home() {
       </form>
 
       {result && (
-        <div className="mt-6 p-4 border rounded shadow w-full max-w-md bg-white">
+        <div className="mt-6 p-4 border rounded shadow w-full max-w-4xl bg-white">
           <div className="mb-4 p-3 bg-blue-50 rounded">
             <h3 className="font-medium text-blue-800">Projected Total After Paycheck</h3>
             <p className="text-2xl font-bold text-blue-900">${result.projectedTotal.toFixed(2)}</p>
           </div>
 
-          <h2 className="text-xl font-semibold mb-2">Suggested Budget (50/30/20 Rule)</h2>
-          <ul className="space-y-1">
-            <li>🧾 Needs: <strong>${result.suggested.needs.total.toFixed(2)}</strong></li>
-            <li>🎈 Wants: <strong>${result.suggested.wants.total.toFixed(2)}</strong></li>
-            <li>💰 Savings: <strong>${result.suggested.savings.total.toFixed(2)}</strong></li>
-          </ul>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">Suggested Budget (50/30/20 Rule)</h2>
+              <ul className="space-y-1">
+                <li>🧾 Needs: <strong>${result.suggested.needs.total.toFixed(2)}</strong></li>
+                <li>🎈 Wants: <strong>${result.suggested.wants.total.toFixed(2)}</strong></li>
+                <li>💰 Savings: <strong>${result.suggested.savings.total.toFixed(2)}</strong></li>
+              </ul>
 
-          <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
-          <ul className="space-y-1">
-            <li className="flex justify-between">
-              <span>Needs Difference:</span>
-              <span className={getDifferenceColor(result.comparison.needsDiff)}>
-                {formatDifference(result.comparison.needsDiff)}
-              </span>
-            </li>
-            <li className="flex justify-between">
-              <span>Wants Difference:</span>
-              <span className={getDifferenceColor(result.comparison.wantsDiff)}>
-                {formatDifference(result.comparison.wantsDiff)}
-              </span>
-            </li>
-            <li className="flex justify-between">
-              <span>Savings Difference:</span>
-              <span className={getDifferenceColor(result.comparison.savingsDiff)}>
-                {formatDifference(result.comparison.savingsDiff)}
-              </span>
-            </li>
-          </ul>
+              <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
+              <ul className="space-y-1">
+                <li className="flex justify-between">
+                  <span>Needs Difference:</span>
+                  <span className={getDifferenceColor(result.comparison.needsDiff)}>
+                    {formatDifference(result.comparison.needsDiff)}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Wants Difference:</span>
+                  <span className={getDifferenceColor(result.comparison.wantsDiff)}>
+                    {formatDifference(result.comparison.wantsDiff)}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span>Savings Difference:</span>
+                  <span className={getDifferenceColor(result.comparison.savingsDiff)}>
+                    {formatDifference(result.comparison.savingsDiff)}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-center">
+              {getChartData() && (
+                <div className="w-full max-w-md">
+                  <Pie data={getChartData()!.data} options={getChartData()!.options} />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </main>
