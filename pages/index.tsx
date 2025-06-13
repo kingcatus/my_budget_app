@@ -21,7 +21,6 @@ export default function Home() {
     // Savings categories
     invest: "",
     emergency: "",
-    goals: "",
   });
 
   const [result, setResult] = useState<null | {
@@ -58,7 +57,7 @@ export default function Home() {
     // Calculate totals for each category
     const needsTotal = parseFloat(form.food) + parseFloat(form.rent) + parseFloat(form.utilities);
     const wantsTotal = parseFloat(form.uber) + parseFloat(form.clothes) + parseFloat(form.entertainment);
-    const savingsTotal = parseFloat(form.invest) + parseFloat(form.emergency) + parseFloat(form.goals);
+    const savingsTotal = parseFloat(form.invest) + parseFloat(form.emergency);
 
     // Calculate suggested budget based on total income
     const suggested = {
@@ -82,8 +81,7 @@ export default function Home() {
         total: totalIncome * 0.2,
         breakdown: {
           invest: totalIncome * 0.10,     // 10% of income
-          emergency: totalIncome * 0.05,  // 5% of income
-          goals: totalIncome * 0.05       // 5% of income
+          emergency: totalIncome * 0.10,  // 10% of income
         }
       }
     };
