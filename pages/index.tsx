@@ -250,6 +250,21 @@ export default function Home() {
     return { data, options };
   };
 
+  const getCategoryStatus = (actual: number, target: number): { text: string; color: string; icon: string } => {
+    const difference = actual - target;
+    if (Math.abs(difference) <= 5) {
+      return { text: "On Target", color: "text-yellow-600 bg-yellow-50", icon: "✅" };
+    } else if (difference > 5) {
+      return { text: "Over", color: "text-red-600 bg-red-50", icon: "⚠️" };
+    } else {
+      return { text: "Under", color: "text-green-600 bg-green-50", icon: "💸" };
+    }
+  };
+
+  const formatPercentage = (value: number): string => {
+    return `${value.toFixed(1)}%`;
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
@@ -484,42 +499,71 @@ export default function Home() {
               <p className="text-gray-500 text-center py-4">No past budgets recorded yet.</p>
             ) : (
               <div className="space-y-4">
-                {history.map((entry, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-medium">
-                        Week of {new Date(entry.date).toLocaleDateString('en-US', {
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </h3>
-                      {entry.goalTarget && (
-                        <span className="text-sm text-purple-600">
-                          Goal: ${parseFloat(entry.goalTarget).toFixed(2)}
-                        </span>
-                      )}
+                {history.map((entry, index) => {
+                  const totalIncome = parseFloat(entry.totalMoney) + parseFloat(entry.paycheck);
+                  const needsPercentage = (entry.needs.total / totalIncome) * 100;
+                  const wantsPercentage = (entry.wants.total / totalIncome) * 100;
+                  const savingsPercentage = (entry.savings.total / totalIncome) * 100;
+
+                  const needsStatus = getCategoryStatus(needsPercentage, 50);
+                  const wantsStatus = getCategoryStatus(wantsPercentage, 30);
+                  const savingsStatus = getCategoryStatus(savingsPercentage, 20);
+
+                  return (
+                    <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-medium">
+                          Week of {new Date(entry.date).toLocaleDateString('en-US', {
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </h3>
+                        {entry.goalTarget && (
+                          <span className="text-sm text-purple-600">
+                            Goal: ${parseFloat(entry.goalTarget).toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600">Income</p>
+                          <p className="font-medium">${totalIncome.toFixed(2)}</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-gray-600">Needs</p>
+                            <span className={`text-xs px-2 py-1 rounded-full ${needsStatus.color}`}>
+                              {needsStatus.icon} {needsStatus.text}
+                            </span>
+                          </div>
+                          <p className="font-medium">${entry.needs.total.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">Target: 50% | Actual: {formatPercentage(needsPercentage)}</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-gray-600">Wants</p>
+                            <span className={`text-xs px-2 py-1 rounded-full ${wantsStatus.color}`}>
+                              {wantsStatus.icon} {wantsStatus.text}
+                            </span>
+                          </div>
+                          <p className="font-medium">${entry.wants.total.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">Target: 30% | Actual: {formatPercentage(wantsPercentage)}</p>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <p className="text-gray-600">Savings</p>
+                            <span className={`text-xs px-2 py-1 rounded-full ${savingsStatus.color}`}>
+                              {savingsStatus.icon} {savingsStatus.text}
+                            </span>
+                          </div>
+                          <p className="font-medium">${entry.savings.total.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">Target: 20% | Actual: {formatPercentage(savingsPercentage)}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-600">Income</p>
-                        <p className="font-medium">${(parseFloat(entry.totalMoney) + parseFloat(entry.paycheck)).toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Needs</p>
-                        <p className="font-medium">${entry.needs.total.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Wants</p>
-                        <p className="font-medium">${entry.wants.total.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Savings</p>
-                        <p className="font-medium">${entry.savings.total.toFixed(2)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
