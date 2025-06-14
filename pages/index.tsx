@@ -1,8 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+interface BudgetEntry {
+  date: string;
+  totalMoney: string;
+  paycheck: string;
+  needs: { total: number; breakdown: { [key: string]: number } };
+  wants: { total: number; breakdown: { [key: string]: number } };
+  savings: { total: number; breakdown: { [key: string]: number } };
+  goalTarget: string;
+}
 
 export default function Home() {
   const [form, setForm] = useState({
@@ -41,6 +51,26 @@ export default function Home() {
     };
     projectedTotal: number;
   }>(null);
+
+  const [history, setHistory] = useState<BudgetEntry[]>([]);
+
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('budgetHistory');
+    if (savedHistory) {
+      setHistory(JSON.parse(savedHistory));
+    }
+  }, []);
+
+  const saveToHistory = (entry: BudgetEntry) => {
+    const newHistory = [entry, ...history];
+    setHistory(newHistory);
+    localStorage.setItem('budgetHistory', JSON.stringify(newHistory));
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    localStorage.removeItem('budgetHistory');
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -99,10 +129,22 @@ export default function Home() {
     });
 
     const data = await response.json();
-    setResult({
+    const result = {
       ...data,
       suggested,
       projectedTotal: totalIncome
+    };
+    setResult(result);
+
+    // Save to history
+    saveToHistory({
+      date: form.date,
+      totalMoney: form.totalMoney,
+      paycheck: form.paycheck,
+      needs: result.actual.needs,
+      wants: result.actual.wants,
+      savings: result.actual.savings,
+      goalTarget: form.goalTarget
     });
   };
 
@@ -422,6 +464,64 @@ export default function Home() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* History Section */}
+          <div className="mt-8 border-t pt-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">📅 Past Budgets</h2>
+              {history.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded"
+                >
+                  Clear All History
+                </button>
+              )}
+            </div>
+            
+            {history.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">No past budgets recorded yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {history.map((entry, index) => (
+                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="font-medium">
+                        Week of {new Date(entry.date).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </h3>
+                      {entry.goalTarget && (
+                        <span className="text-sm text-purple-600">
+                          Goal: ${parseFloat(entry.goalTarget).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">Income</p>
+                        <p className="font-medium">${(parseFloat(entry.totalMoney) + parseFloat(entry.paycheck)).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Needs</p>
+                        <p className="font-medium">${entry.needs.total.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Wants</p>
+                        <p className="font-medium">${entry.wants.total.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Savings</p>
+                        <p className="font-medium">${entry.savings.total.toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
