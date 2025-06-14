@@ -5,6 +5,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+interface RecurringExpense {
+  id: string;
+  name: string;
+  amount: number;
+  type: 'needs' | 'wants';
+}
+
 interface BudgetEntry {
   date: string;
   totalMoney: string;
@@ -15,6 +22,7 @@ interface BudgetEntry {
   goalTarget: string;
   notes?: string;
   tags?: string[];
+  recurringExpenses: RecurringExpense[];
 }
 
 export default function Home() {
@@ -87,6 +95,14 @@ export default function Home() {
     { id: 'miscellaneous', label: 'Miscellaneous', color: 'bg-gray-100 text-gray-800' },
   ];
 
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
+  const [newExpense, setNewExpense] = useState<Omit<RecurringExpense, 'id'>>({
+    name: '',
+    amount: 0,
+    type: 'needs'
+  });
+  const [isRecurringExpensesOpen, setIsRecurringExpensesOpen] = useState(false);
+
   useEffect(() => {
     setIsClient(true);
     setDailyQuote(dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]);
@@ -131,6 +147,42 @@ export default function Home() {
         ? prev.tags.filter(id => id !== tagId)
         : [...prev.tags, tagId]
     }));
+  };
+
+  const handleNewExpenseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewExpense(prev => ({
+      ...prev,
+      [name]: name === 'amount' ? parseFloat(value) || 0 : value
+    }));
+  };
+
+  const addRecurringExpense = () => {
+    if (newExpense.name && newExpense.amount > 0) {
+      setRecurringExpenses(prev => [...prev, {
+        ...newExpense,
+        id: Date.now().toString()
+      }]);
+      setNewExpense({
+        name: '',
+        amount: 0,
+        type: 'needs'
+      });
+    }
+  };
+
+  const removeRecurringExpense = (id: string) => {
+    setRecurringExpenses(prev => prev.filter(expense => expense.id !== id));
+  };
+
+  const updateRecurringExpense = (id: string, updates: Partial<RecurringExpense>) => {
+    setRecurringExpenses(prev => prev.map(expense => 
+      expense.id === id ? { ...expense, ...updates } : expense
+    ));
+  };
+
+  const getTotalRecurringExpenses = () => {
+    return recurringExpenses.reduce((total, expense) => total + expense.amount, 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -199,7 +251,8 @@ export default function Home() {
       savings: result.actual.savings,
       goalTarget: form.goalTarget,
       notes: form.notes,
-      tags: form.tags
+      tags: form.tags,
+      recurringExpenses: recurringExpenses
     });
 
     // Reset notes and tags after submission
@@ -379,6 +432,19 @@ export default function Home() {
     return null;
   };
 
+  // Load recurring expenses from localStorage
+  useEffect(() => {
+    const savedExpenses = localStorage.getItem('recurringExpenses');
+    if (savedExpenses) {
+      setRecurringExpenses(JSON.parse(savedExpenses));
+    }
+  }, []);
+
+  // Save recurring expenses to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('recurringExpenses', JSON.stringify(recurringExpenses));
+  }, [recurringExpenses]);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       {/* Quote of the Day Section */}
@@ -554,6 +620,104 @@ export default function Home() {
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="border rounded-lg p-4 bg-gray-50">
+          <button
+            type="button"
+            onClick={() => setIsRecurringExpensesOpen(!isRecurringExpensesOpen)}
+            className="w-full flex items-center justify-between text-left font-medium text-gray-700"
+          >
+            <span>🔄 Recurring Expenses</span>
+            <span className="text-sm text-gray-500">
+              Total: ${getTotalRecurringExpenses().toFixed(2)}
+            </span>
+          </button>
+
+          {isRecurringExpensesOpen && (
+            <div className="mt-4 space-y-4">
+              {recurringExpenses.length > 0 && (
+                <div className="space-y-2">
+                  {recurringExpenses.map(expense => (
+                    <div key={expense.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={expense.name}
+                          onChange={(e) => updateRecurringExpense(expense.id, { name: e.target.value })}
+                          className="w-full p-1 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+                        />
+                        <div className="flex items-center space-x-2 mt-1">
+                          <input
+                            type="number"
+                            value={expense.amount}
+                            onChange={(e) => updateRecurringExpense(expense.id, { amount: parseFloat(e.target.value) || 0 })}
+                            className="w-24 p-1 border rounded"
+                          />
+                          <select
+                            value={expense.type}
+                            onChange={(e) => updateRecurringExpense(expense.id, { type: e.target.value as 'needs' | 'wants' })}
+                            className="p-1 border rounded"
+                          >
+                            <option value="needs">Needs</option>
+                            <option value="wants">Wants</option>
+                          </select>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeRecurringExpense(expense.id)}
+                        className="ml-2 text-red-600 hover:text-red-800"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="p-3 bg-white rounded border">
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    name="name"
+                    value={newExpense.name}
+                    onChange={handleNewExpenseChange}
+                    placeholder="Expense name"
+                    className="w-full p-2 border rounded"
+                  />
+                  <div className="flex space-x-2">
+                    <input
+                      type="number"
+                      name="amount"
+                      value={newExpense.amount || ''}
+                      onChange={handleNewExpenseChange}
+                      placeholder="Amount"
+                      className="flex-1 p-2 border rounded"
+                    />
+                    <select
+                      name="type"
+                      value={newExpense.type}
+                      onChange={handleNewExpenseChange}
+                      className="p-2 border rounded"
+                    >
+                      <option value="needs">Needs</option>
+                      <option value="wants">Wants</option>
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addRecurringExpense}
+                    className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                  >
+                    Add Recurring Expense
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <button
@@ -768,6 +932,27 @@ export default function Home() {
                           <p className="text-sm text-gray-700 italic">"{currentMotivationalQuote}"</p>
                         </div>
                       </div>
+
+                      {/* Add Recurring Expenses display */}
+                      {entry.recurringExpenses && entry.recurringExpenses.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Recurring Expenses</h4>
+                          <div className="space-y-2">
+                            {entry.recurringExpenses.map(expense => (
+                              <div key={expense.id} className="flex justify-between items-center text-sm">
+                                <span className="text-gray-600">{expense.name}</span>
+                                <span className="font-medium">${expense.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                              <span className="font-medium text-gray-700">Total Recurring</span>
+                              <span className="font-bold text-gray-900">
+                                ${entry.recurringExpenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Add Notes and Tags display */}
                       {(entry.notes || entry.tags?.length) && (
