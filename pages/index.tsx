@@ -13,6 +13,8 @@ interface BudgetEntry {
   wants: { total: number; breakdown: { [key: string]: number } };
   savings: { total: number; breakdown: { [key: string]: number } };
   goalTarget: string;
+  notes?: string;
+  tags?: string[];
 }
 
 export default function Home() {
@@ -21,6 +23,8 @@ export default function Home() {
     totalMoney: "",
     paycheck: "",
     goalTarget: "", // Add goal target field
+    notes: "",
+    tags: [] as string[],
     // Needs categories
     food: "",
     rent: "",
@@ -72,6 +76,17 @@ export default function Home() {
   const [dailyQuote, setDailyQuote] = useState("");
   const [currentMotivationalQuote, setCurrentMotivationalQuote] = useState("");
 
+  const categoryTags = [
+    { id: 'rent', label: 'Rent', color: 'bg-blue-100 text-blue-800' },
+    { id: 'groceries', label: 'Groceries', color: 'bg-green-100 text-green-800' },
+    { id: 'transportation', label: 'Transportation', color: 'bg-yellow-100 text-yellow-800' },
+    { id: 'entertainment', label: 'Entertainment', color: 'bg-purple-100 text-purple-800' },
+    { id: 'subscriptions', label: 'Subscriptions', color: 'bg-pink-100 text-pink-800' },
+    { id: 'medical', label: 'Medical', color: 'bg-red-100 text-red-800' },
+    { id: 'travel', label: 'Travel', color: 'bg-indigo-100 text-indigo-800' },
+    { id: 'miscellaneous', label: 'Miscellaneous', color: 'bg-gray-100 text-gray-800' },
+  ];
+
   useEffect(() => {
     setIsClient(true);
     setDailyQuote(dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]);
@@ -101,11 +116,20 @@ export default function Home() {
     localStorage.removeItem('budgetHistory');
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setForm(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handleTagChange = (tagId: string) => {
+    setForm(prev => ({
+      ...prev,
+      tags: prev.tags.includes(tagId)
+        ? prev.tags.filter(id => id !== tagId)
+        : [...prev.tags, tagId]
     }));
   };
 
@@ -173,8 +197,17 @@ export default function Home() {
       needs: result.actual.needs,
       wants: result.actual.wants,
       savings: result.actual.savings,
-      goalTarget: form.goalTarget
+      goalTarget: form.goalTarget,
+      notes: form.notes,
+      tags: form.tags
     });
+
+    // Reset notes and tags after submission
+    setForm(prev => ({
+      ...prev,
+      notes: "",
+      tags: []
+    }));
   };
 
   const getDifferenceColor = (diff: number, category: 'needs' | 'wants' | 'savings') => {
@@ -484,6 +517,45 @@ export default function Home() {
           </div>
         </div>
 
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Add notes about this week's budget (optional)"
+              className="w-full p-2 border border-gray-300 rounded min-h-[80px] resize-y"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Spending Categories
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {categoryTags.map(tag => (
+                <label
+                  key={tag.id}
+                  className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                    form.tags.includes(tag.id) ? tag.color : 'bg-gray-50 hover:bg-gray-100'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.tags.includes(tag.id)}
+                    onChange={() => handleTagChange(tag.id)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm">{tag.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <button
           type="submit"
           className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
@@ -696,6 +768,30 @@ export default function Home() {
                           <p className="text-sm text-gray-700 italic">"{currentMotivationalQuote}"</p>
                         </div>
                       </div>
+
+                      {/* Add Notes and Tags display */}
+                      {(entry.notes || entry.tags?.length) && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          {entry.notes && (
+                            <p className="text-gray-600 italic mb-2">"{entry.notes}"</p>
+                          )}
+                          {entry.tags && entry.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {entry.tags.map(tagId => {
+                                const tag = categoryTags.find(t => t.id === tagId);
+                                return tag ? (
+                                  <span
+                                    key={tagId}
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${tag.color}`}
+                                  >
+                                    {tag.label}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
