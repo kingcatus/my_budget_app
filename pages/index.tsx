@@ -68,9 +68,15 @@ export default function Home() {
     "The harder you work for something, the greater you'll feel when you achieve it."
   ];
 
-  const [dailyQuote, setDailyQuote] = useState(() => 
-    dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]
-  );
+  const [isClient, setIsClient] = useState(false);
+  const [dailyQuote, setDailyQuote] = useState("");
+  const [currentMotivationalQuote, setCurrentMotivationalQuote] = useState("");
+
+  useEffect(() => {
+    setIsClient(true);
+    setDailyQuote(dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]);
+    setCurrentMotivationalQuote(motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]);
+  }, []);
 
   const refreshQuote = () => {
     const newQuote = dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)];
@@ -322,10 +328,18 @@ export default function Home() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border rounded shadow-sm">
-          <p className="font-medium">{label}</p>
-          <p className="text-red-600">Spent: ${payload[0].value.toFixed(2)}</p>
-          <p className="text-blue-600">Saved: ${payload[1].value.toFixed(2)}</p>
+        <div className="bg-white p-4 border rounded-lg shadow-lg">
+          <p className="font-semibold text-gray-800 mb-2">{label}</p>
+          <div className="space-y-1">
+            <p className="flex items-center">
+              <span className="w-3 h-3 rounded-full bg-red-500 mr-2"></span>
+              <span className="text-red-600 font-medium">Spent: ${payload[0].value.toFixed(2)}</span>
+            </p>
+            <p className="flex items-center">
+              <span className="w-3 h-3 rounded-full bg-green-500 mr-2"></span>
+              <span className="text-green-600 font-medium">Saved: ${payload[1].value.toFixed(2)}</span>
+            </p>
+          </div>
         </div>
       );
     }
@@ -335,23 +349,25 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       {/* Quote of the Day Section */}
-      <div className="w-full max-w-4xl mb-8">
-        <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-6 rounded-lg shadow-sm relative">
-          <button
-            onClick={refreshQuote}
-            className="absolute top-2 right-2 p-2 text-gray-600 hover:text-purple-600 transition-colors"
-            title="Get new quote"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-          </button>
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">💫 Quote of the Day</h2>
-            <p className="text-gray-700 italic">"{dailyQuote}"</p>
+      {isClient && (
+        <div className="w-full max-w-4xl mb-8">
+          <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-6 rounded-lg shadow-sm relative">
+            <button
+              onClick={refreshQuote}
+              className="absolute top-2 right-2 p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              title="Get new quote"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <div className="text-center">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">💫 Quote of the Day</h2>
+              <p className="text-gray-700 italic">"{dailyQuote}"</p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
       <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-sm">
@@ -677,7 +693,7 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
-                          <p className="text-sm text-gray-700 italic">"{getRandomQuote()}"</p>
+                          <p className="text-sm text-gray-700 italic">"{currentMotivationalQuote}"</p>
                         </div>
                       </div>
                     </div>
@@ -689,44 +705,63 @@ export default function Home() {
 
           {/* Weekly Budget Comparison Chart */}
           <div className="mt-8 border-t pt-6">
-            <h2 className="text-xl font-semibold mb-4">📈 Weekly Budget Comparison</h2>
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-800">📊 Weekly Budget Trends</h2>
+              <p className="text-gray-600 mt-1">Track your spending and saving patterns over time</p>
+            </div>
+            
             {history.length === 0 ? (
               <p className="text-gray-500 text-center py-8">Add budgets to see your spending and saving trends.</p>
             ) : (
-              <div className="h-[400px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={formatChartData(history)}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="date" 
-                      tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => `$${value}`}
-                    />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                    <RechartsLegend />
-                    <Bar 
-                      dataKey="spent" 
-                      name="Spent" 
-                      fill="#EF4444" 
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <Bar 
-                      dataKey="saved" 
-                      name="Saved" 
-                      fill="#3B82F6" 
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="bg-white p-6 rounded-xl shadow-sm">
+                <div className="h-[400px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={formatChartData(history)}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis 
+                        dataKey="date" 
+                        tick={{ fontSize: 12 }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        label={{ value: 'Week', position: 'insideBottom', offset: -5 }}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => `$${value}`}
+                        label={{ value: 'Amount ($)', angle: -90, position: 'insideLeft', offset: 10 }}
+                      />
+                      <RechartsTooltip 
+                        content={<CustomTooltip />}
+                        cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                      />
+                      <RechartsLegend 
+                        verticalAlign="top" 
+                        height={36}
+                        wrapperStyle={{
+                          paddingTop: '20px'
+                        }}
+                      />
+                      <Bar 
+                        dataKey="spent" 
+                        name="Spent" 
+                        fill="#EF4444" 
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={50}
+                      />
+                      <Bar 
+                        dataKey="saved" 
+                        name="Saved" 
+                        fill="#10B981" 
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={50}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </div>
