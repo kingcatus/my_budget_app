@@ -357,15 +357,17 @@ export default function Home() {
 
           {form.goalTarget && (
             <div className="mb-4 p-3 bg-purple-50 rounded">
-              <h3 className="font-medium text-purple-800 mb-2">Weekly Savings Goal Progress</h3>
+              <h3 className="font-medium text-purple-800 mb-2">Weekly Goal Progress</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-gray-600">Target Amount</p>
+                  <p className="text-sm text-gray-600">Desired Amount for Next Week</p>
                   <p className="text-xl font-bold text-purple-900">${parseFloat(form.goalTarget).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Current Savings</p>
-                  <p className="text-xl font-bold text-purple-900">${result.actual.savings.total.toFixed(2)}</p>
+                  <p className="text-sm text-gray-600">Remaining Balance</p>
+                  <p className="text-xl font-bold text-purple-900">
+                    ${((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total)).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Total Spent This Week</p>
@@ -373,8 +375,8 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Hours Needed to Work</p>
-                  <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > result.actual.savings.total ? 'text-red-600' : 'text-green-600'}`}>
-                    {Math.ceil(Math.max(0, parseFloat(form.goalTarget) - result.actual.savings.total) / 14)} hours
+                  <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > ((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total)) ? 'text-red-600' : 'text-green-600'}`}>
+                    {Math.ceil(Math.max(0, parseFloat(form.goalTarget) - ((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total))) / 14)} hours
                   </p>
                 </div>
               </div>
