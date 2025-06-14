@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -308,6 +309,27 @@ export default function Home() {
     if (needs > wants) return "Needs";
     if (wants > needs) return "Wants";
     return "Equal";
+  };
+
+  const formatChartData = (history: BudgetEntry[]) => {
+    return history.map(entry => ({
+      date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      spent: entry.needs.total + entry.wants.total,
+      saved: entry.savings.total
+    })).reverse(); // Reverse to show oldest to newest
+  };
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border rounded shadow-sm">
+          <p className="font-medium">{label}</p>
+          <p className="text-red-600">Spent: ${payload[0].value.toFixed(2)}</p>
+          <p className="text-blue-600">Saved: ${payload[1].value.toFixed(2)}</p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -661,6 +683,50 @@ export default function Home() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* Weekly Budget Comparison Chart */}
+          <div className="mt-8 border-t pt-6">
+            <h2 className="text-xl font-semibold mb-4">📈 Weekly Budget Comparison</h2>
+            {history.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">Add budgets to see your spending and saving trends.</p>
+            ) : (
+              <div className="h-[400px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={formatChartData(history)}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(value) => `$${value}`}
+                    />
+                    <RechartsTooltip content={<CustomTooltip />} />
+                    <RechartsLegend />
+                    <Bar 
+                      dataKey="spent" 
+                      name="Spent" 
+                      fill="#EF4444" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar 
+                      dataKey="saved" 
+                      name="Saved" 
+                      fill="#3B82F6" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
           </div>
