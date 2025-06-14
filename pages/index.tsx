@@ -265,6 +265,29 @@ export default function Home() {
     return `${value.toFixed(1)}%`;
   };
 
+  const motivationalQuotes = [
+    "Every dollar saved is a step closer to your dreams.",
+    "Small steps in saving lead to giant leaps in financial freedom.",
+    "Your future self will thank you for your smart choices today.",
+    "Budgeting isn't about restriction, it's about making your money work for you.",
+    "Financial success is built one budget at a time.",
+    "The best time to start saving was yesterday. The second best time is now.",
+    "Your budget is your financial roadmap to success.",
+    "Smart spending today creates wealth for tomorrow.",
+    "Every budget is a chance to build a better financial future.",
+    "Your financial goals are within reach, one budget at a time."
+  ];
+
+  const getRandomQuote = () => {
+    return motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+  };
+
+  const getBiggestCategory = (needs: number, wants: number): string => {
+    if (needs > wants) return "Needs";
+    if (wants > needs) return "Wants";
+    return "Equal";
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
@@ -509,6 +532,9 @@ export default function Home() {
                   const wantsStatus = getCategoryStatus(wantsPercentage, 30);
                   const savingsStatus = getCategoryStatus(savingsPercentage, 20);
 
+                  const totalSpent = entry.needs.total + entry.wants.total;
+                  const biggestCategory = getBiggestCategory(entry.needs.total, entry.wants.total);
+
                   return (
                     <div key={index} className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex justify-between items-start mb-2">
@@ -559,6 +585,36 @@ export default function Home() {
                           </div>
                           <p className="font-medium">${entry.savings.total.toFixed(2)}</p>
                           <p className="text-xs text-gray-500">Target: 20% | Actual: {formatPercentage(savingsPercentage)}</p>
+                        </div>
+                      </div>
+
+                      {/* Weekly Summary Report */}
+                      <div className="mt-6 pt-4 border-t border-gray-200">
+                        <h4 className="text-lg font-semibold mb-3">💡 Weekly Summary Report</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                          <div className="bg-white p-3 rounded-lg shadow-sm">
+                            <p className="text-sm text-gray-600">Total Spent</p>
+                            <p className="text-xl font-bold text-gray-800">${totalSpent.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">Needs + Wants</p>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg shadow-sm">
+                            <p className="text-sm text-gray-600">Total Saved</p>
+                            <p className="text-xl font-bold text-green-600">${entry.savings.total.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">Savings + Investments</p>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg shadow-sm">
+                            <p className="text-sm text-gray-600">Biggest Category</p>
+                            <p className="text-xl font-bold text-purple-600">{biggestCategory}</p>
+                            <p className="text-xs text-gray-500">
+                              {biggestCategory === "Equal" 
+                                ? "Equal spending in both categories"
+                                : `Highest spending in ${biggestCategory.toLowerCase()}`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
+                          <p className="text-sm text-gray-700 italic">"{getRandomQuote()}"</p>
                         </div>
                       </div>
                     </div>
