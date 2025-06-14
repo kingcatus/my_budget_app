@@ -445,6 +445,56 @@ export default function Home() {
     localStorage.setItem('recurringExpenses', JSON.stringify(recurringExpenses));
   }, [recurringExpenses]);
 
+  const getAICoachMessage = (data: BudgetEntry) => {
+    const totalIncome = parseFloat(data.totalMoney) + parseFloat(data.paycheck);
+    const needsPercentage = (data.needs.total / totalIncome) * 100;
+    const wantsPercentage = (data.wants.total / totalIncome) * 100;
+    const savingsPercentage = (data.savings.total / totalIncome) * 100;
+
+    // Analyze spending patterns
+    const isNeedsOver = needsPercentage > 55;
+    const isNeedsUnder = needsPercentage < 45;
+    const isWantsOver = wantsPercentage > 35;
+    const isWantsUnder = wantsPercentage < 25;
+    const isSavingsOver = savingsPercentage > 25;
+    const isSavingsUnder = savingsPercentage < 15;
+
+    // Generate personalized message
+    let message = "";
+    let emoji = "🎯";
+    let tone = "text-blue-800";
+
+    if (isSavingsOver) {
+      message = `Excellent work! You're saving ${savingsPercentage.toFixed(1)}% of your income, which exceeds your 20% target. This is a great foundation for your financial future!`;
+      emoji = "🌟";
+      tone = "text-green-800";
+    } else if (isSavingsUnder) {
+      message = `Your savings rate is ${savingsPercentage.toFixed(1)}%, which is below the recommended 20%. Consider setting aside a bit more for your future goals.`;
+      emoji = "💡";
+      tone = "text-yellow-800";
+    }
+
+    if (isWantsOver) {
+      message = `Your wants category (${wantsPercentage.toFixed(1)}%) is higher than the recommended 30%. Try to identify areas where you can reduce discretionary spending.`;
+      emoji = "🎯";
+      tone = "text-orange-800";
+    }
+
+    if (isNeedsOver) {
+      message = `Your essential needs (${needsPercentage.toFixed(1)}%) are taking up more than the recommended 50%. Consider reviewing your fixed expenses to find potential savings.`;
+      emoji = "📊";
+      tone = "text-red-800";
+    }
+
+    if (!isNeedsOver && !isWantsOver && !isSavingsUnder) {
+      message = `Perfect balance! You're following the 50/30/20 rule closely. Keep up the great work!`;
+      emoji = "🎉";
+      tone = "text-green-800";
+    }
+
+    return { message, emoji, tone };
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -454,7 +504,7 @@ export default function Home() {
             💸
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Personalized Budget Planner</h1>
-          <p className="text-lg text-gray-600">Take control of your finances, one week at a time</p>
+          <p className="text-lg text-gray-600">Take Control of Your Finances, One Week At a Time</p>
         </div>
 
         {/* Quote of the Day Section */}
@@ -825,12 +875,36 @@ export default function Home() {
                   </ul>
                 </div>
 
-                <div className="flex items-center justify-center">
+                <div className="flex flex-col items-center justify-center">
                   {getChartData() && (
                     <div className="w-full max-w-md">
                       <Pie data={getChartData()!.data} options={getChartData()!.options} />
                     </div>
                   )}
+
+                  {/* AI Budget Coach Section */}
+                  <div className="w-full mt-6">
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 shadow-sm">
+                      <div className="flex items-center mb-3">
+                        <span className="text-2xl mr-2">🧠</span>
+                        <h3 className="text-lg font-semibold text-gray-800">AI Budget Coach</h3>
+                      </div>
+                      {history.length > 0 && (
+                        <div className="space-y-3">
+                          {(() => {
+                            const latestEntry = history[0];
+                            const { message, emoji, tone } = getAICoachMessage(latestEntry);
+                            return (
+                              <div className="flex items-start space-x-3">
+                                <span className="text-2xl">{emoji}</span>
+                                <p className={`text-sm ${tone} leading-relaxed`}>{message}</p>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
