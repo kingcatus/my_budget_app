@@ -54,6 +54,28 @@ export default function Home() {
 
   const [history, setHistory] = useState<BudgetEntry[]>([]);
 
+  const dailyQuotes = [
+    "The only way to do great work is to love what you do.",
+    "Success is not final, failure is not fatal: it is the courage to continue that counts.",
+    "The future belongs to those who believe in the beauty of their dreams.",
+    "Your time is limited, don't waste it living someone else's life.",
+    "The best way to predict the future is to create it.",
+    "Don't watch the clock; do what it does. Keep going.",
+    "The only limit to our realization of tomorrow is our doubts of today.",
+    "Believe you can and you're halfway there.",
+    "Everything you've ever wanted is on the other side of fear.",
+    "The harder you work for something, the greater you'll feel when you achieve it."
+  ];
+
+  const [dailyQuote, setDailyQuote] = useState(() => 
+    dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]
+  );
+
+  const refreshQuote = () => {
+    const newQuote = dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)];
+    setDailyQuote(newQuote);
+  };
+
   useEffect(() => {
     const savedHistory = localStorage.getItem('budgetHistory');
     if (savedHistory) {
@@ -290,6 +312,25 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-8">
+      {/* Quote of the Day Section */}
+      <div className="w-full max-w-4xl mb-8">
+        <div className="bg-gradient-to-r from-purple-100 to-blue-100 p-6 rounded-lg shadow-sm relative">
+          <button
+            onClick={refreshQuote}
+            className="absolute top-2 right-2 p-2 text-gray-600 hover:text-purple-600 transition-colors"
+            title="Get new quote"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+            </svg>
+          </button>
+          <div className="text-center">
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">💫 Quote of the Day</h2>
+            <p className="text-gray-700 italic">"{dailyQuote}"</p>
+          </div>
+        </div>
+      </div>
+
       <h1 className="text-3xl font-bold mb-6">📊 Personalized Budget Planner</h1>
       <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-sm">
         <div className="space-y-4">
