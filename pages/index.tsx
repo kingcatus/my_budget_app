@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval } from 'date-fns';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,6 +24,24 @@ interface BudgetEntry {
   notes?: string;
   tags?: string[];
   recurringExpenses: RecurringExpense[];
+}
+
+interface DailyExpense {
+  id: string;
+  date: string;
+  amount: number;
+  category: string;
+  description: string;
+  type: 'needs' | 'wants' | 'savings';
+}
+
+interface WeeklyBudget {
+  id: string;
+  startDate: string;
+  endDate: string;
+  totalBudget: number;
+  dailyExpenses: DailyExpense[];
+  notes?: string;
 }
 
 export default function Home() {
@@ -96,12 +115,22 @@ export default function Home() {
   ];
 
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
-  const [newExpense, setNewExpense] = useState<Omit<RecurringExpense, 'id'>>({
+  const [newRecurringExpense, setNewRecurringExpense] = useState<Omit<RecurringExpense, 'id'>>({
     name: '',
     amount: 0,
     type: 'needs'
   });
   const [isRecurringExpensesOpen, setIsRecurringExpensesOpen] = useState(false);
+
+  const [weeklyBudgets, setWeeklyBudgets] = useState<WeeklyBudget[]>([]);
+  const [selectedWeek, setSelectedWeek] = useState<WeeklyBudget | null>(null);
+  const [newExpense, setNewExpense] = useState<Omit<DailyExpense, 'id'>>({
+    date: new Date().toISOString().split('T')[0],
+    amount: 0,
+    category: '',
+    description: '',
+    type: 'needs'
+  });
 
   useEffect(() => {
     setIsClient(true);
@@ -149,21 +178,21 @@ export default function Home() {
     }));
   };
 
-  const handleNewExpenseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleNewRecurringExpenseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setNewExpense(prev => ({
+    setNewRecurringExpense(prev => ({
       ...prev,
       [name]: name === 'amount' ? parseFloat(value) || 0 : value
     }));
   };
 
   const addRecurringExpense = () => {
-    if (newExpense.name && newExpense.amount > 0) {
+    if (newRecurringExpense.name && newRecurringExpense.amount > 0) {
       setRecurringExpenses(prev => [...prev, {
-        ...newExpense,
+        ...newRecurringExpense,
         id: Date.now().toString()
       }]);
-      setNewExpense({
+      setNewRecurringExpense({
         name: '',
         amount: 0,
         type: 'needs'
@@ -404,11 +433,25 @@ export default function Home() {
   };
 
   const formatChartData = (history: BudgetEntry[]) => {
-    return history.map(entry => ({
-      date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      spent: entry.needs.total + entry.wants.total,
-      saved: entry.savings.total
-    })).reverse(); // Reverse to show oldest to newest
+    const weeklyData = history.reduce((acc, entry) => {
+      const weekStart = startOfWeek(new Date(entry.date), { weekStartsOn: 1 });
+      const weekKey = weekStart.toISOString();
+      
+      if (!acc[weekKey]) {
+        acc[weekKey] = {
+          date: format(weekStart, 'MMM dd'),
+          spent: 0,
+          saved: 0
+        };
+      }
+      
+      acc[weekKey].spent += entry.needs.total + entry.wants.total;
+      acc[weekKey].saved += entry.savings.total;
+      
+      return acc;
+    }, {} as { [key: string]: { date: string; spent: number; saved: number } });
+
+    return Object.values(weeklyData).reverse();
   };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -495,6 +538,280 @@ export default function Home() {
     return { message, emoji, tone };
   };
 
+  // Load weekly budgets from localStorage
+  useEffect(() => {
+    const savedBudgets = localStorage.getItem('weeklyBudgets');
+    if (savedBudgets) {
+      setWeeklyBudgets(JSON.parse(savedBudgets));
+    }
+  }, []);
+
+  // Save weekly budgets to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('weeklyBudgets', JSON.stringify(weeklyBudgets));
+  }, [weeklyBudgets]);
+
+  const getCurrentWeek = () => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 }); // Start on Monday
+    const end = endOfWeek(today, { weekStartsOn: 1 });
+    return { start, end };
+  };
+
+  const createNewWeek = () => {
+    const { start, end } = getCurrentWeek();
+    const newWeek: WeeklyBudget = {
+      id: Date.now().toString(),
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      totalBudget: 0,
+      dailyExpenses: []
+    };
+    setWeeklyBudgets(prev => [...prev, newWeek]);
+    setSelectedWeek(newWeek);
+  };
+
+  const calculateRemainingBudget = (week: WeeklyBudget) => {
+    const totals = getWeeklyTotals(week);
+    const totalSpent = Object.values(totals).reduce((sum, amount) => sum + amount, 0);
+    return week.totalBudget - totalSpent;
+  };
+
+  const calculateCategoryPercentages = (week: WeeklyBudget) => {
+    const totals = getWeeklyTotals(week);
+    const totalSpent = Object.values(totals).reduce((sum, amount) => sum + amount, 0);
+    
+    return {
+      needs: ((totals.needs || 0) / totalSpent) * 100,
+      wants: ((totals.wants || 0) / totalSpent) * 100,
+      savings: ((totals.savings || 0) / totalSpent) * 100
+    };
+  };
+
+  const addExpense = (weekId: string) => {
+    if (newExpense.amount <= 0 || !newExpense.category || !newExpense.description) return;
+
+    const expense: DailyExpense = {
+      ...newExpense,
+      id: Date.now().toString()
+    };
+
+    setWeeklyBudgets(prev => prev.map(week => {
+      if (week.id === weekId) {
+        const updatedWeek = {
+          ...week,
+          dailyExpenses: [...week.dailyExpenses, expense]
+        };
+        
+        // Update the selected week if it's the current week
+        if (selectedWeek?.id === weekId) {
+          setSelectedWeek(updatedWeek);
+        }
+        
+        return updatedWeek;
+      }
+      return week;
+    }));
+
+    // Reset form
+    setNewExpense({
+      date: new Date().toISOString().split('T')[0],
+      amount: 0,
+      category: '',
+      description: '',
+      type: 'needs'
+    });
+  };
+
+  const removeExpense = (weekId: string, expenseId: string) => {
+    setWeeklyBudgets(prev => prev.map(week => {
+      if (week.id === weekId) {
+        const updatedWeek = {
+          ...week,
+          dailyExpenses: week.dailyExpenses.filter(expense => expense.id !== expenseId)
+        };
+        
+        // Update the selected week if it's the current week
+        if (selectedWeek?.id === weekId) {
+          setSelectedWeek(updatedWeek);
+        }
+        
+        return updatedWeek;
+      }
+      return week;
+    }));
+  };
+
+  const getWeeklyTotals = (week: WeeklyBudget) => {
+    return week.dailyExpenses.reduce((acc, expense) => {
+      acc[expense.type] = (acc[expense.type] || 0) + expense.amount;
+      return acc;
+    }, {} as { [key: string]: number });
+  };
+
+  // Update the renderWeeklyCalendar function
+  const renderWeeklyCalendar = () => (
+    <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">📅 Weekly Expense Tracker</h2>
+        <button
+          onClick={createNewWeek}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Start New Week
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Week Selection */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-800">Select Week</h3>
+          <div className="space-y-2">
+            {weeklyBudgets.map(week => (
+              <button
+                key={week.id}
+                onClick={() => setSelectedWeek(week)}
+                className={`w-full p-4 text-left rounded-lg transition-colors ${
+                  selectedWeek?.id === week.id
+                    ? 'bg-blue-50 border-2 border-blue-500'
+                    : 'bg-gray-50 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">
+                    Week of {format(new Date(week.startDate), 'MMM dd')} - {format(new Date(week.endDate), 'MMM dd')}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    {week.dailyExpenses.length} expenses
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Expense Form and List */}
+        {selectedWeek && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 p-4 rounded-lg mb-4">
+              <h3 className="text-lg font-semibold text-blue-800 mb-2">Budget Summary</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600">Total Budget</p>
+                  <p className="text-xl font-bold text-blue-900">${selectedWeek.totalBudget.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Remaining</p>
+                  <p className="text-xl font-bold text-blue-900">${calculateRemainingBudget(selectedWeek).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <h3 className="text-lg font-semibold text-gray-800">Add Expense</h3>
+            <div className="space-y-3">
+              <input
+                type="date"
+                value={newExpense.date}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, date: e.target.value }))}
+                className="w-full p-2 border rounded"
+                min={selectedWeek.startDate}
+                max={selectedWeek.endDate}
+              />
+              <input
+                type="number"
+                value={newExpense.amount || ''}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                placeholder="Amount"
+                className="w-full p-2 border rounded"
+                step="0.01"
+                min="0"
+              />
+              <input
+                type="text"
+                value={newExpense.category}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, category: e.target.value }))}
+                placeholder="Category"
+                className="w-full p-2 border rounded"
+              />
+              <input
+                type="text"
+                value={newExpense.description}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Description"
+                className="w-full p-2 border rounded"
+              />
+              <select
+                value={newExpense.type}
+                onChange={(e) => setNewExpense(prev => ({ ...prev, type: e.target.value as 'needs' | 'wants' | 'savings' }))}
+                className="w-full p-2 border rounded"
+              >
+                <option value="needs">Needs</option>
+                <option value="wants">Wants</option>
+                <option value="savings">Savings</option>
+              </select>
+              <button
+                onClick={() => addExpense(selectedWeek.id)}
+                className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700"
+              >
+                Add Expense
+              </button>
+            </div>
+
+            {/* Expense List */}
+            <div className="mt-6">
+              <h4 className="font-medium text-gray-800 mb-3">This Week's Expenses</h4>
+              <div className="space-y-2">
+                {selectedWeek.dailyExpenses.map(expense => (
+                  <div key={expense.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                    <div>
+                      <p className="font-medium">{expense.category}</p>
+                      <p className="text-sm text-gray-600">{expense.description}</p>
+                      <p className="text-xs text-gray-500">
+                        {format(new Date(expense.date), 'MMM dd')}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <span className="font-medium">${expense.amount.toFixed(2)}</span>
+                      <button
+                        onClick={() => removeExpense(selectedWeek.id, expense.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Weekly Summary */}
+              {selectedWeek.dailyExpenses.length > 0 && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Weekly Summary</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    {Object.entries(getWeeklyTotals(selectedWeek)).map(([type, amount]) => {
+                      const percentages = calculateCategoryPercentages(selectedWeek);
+                      return (
+                        <div key={type} className="text-center">
+                          <p className="text-sm text-gray-600 capitalize">{type}</p>
+                          <p className="font-bold text-blue-900">${amount.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">
+                            {percentages[type as keyof typeof percentages]?.toFixed(1)}% of total
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -527,6 +844,9 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* Weekly Calendar Section */}
+        {renderWeeklyCalendar()}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
@@ -619,15 +939,15 @@ export default function Home() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {label}
                       </label>
-                      <input
-                        type="number"
+          <input
+            type="number"
                         name={name}
                         value={form[name as keyof typeof form]}
-                        onChange={handleChange}
+            onChange={handleChange}
                         placeholder={`Enter ${label.toLowerCase()} amount`}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        required
-                      />
+            required
+          />
                     </div>
                   ))}
                   <div className="mt-4">
@@ -746,8 +1066,8 @@ export default function Home() {
                         <input
                           type="text"
                           name="name"
-                          value={newExpense.name}
-                          onChange={handleNewExpenseChange}
+                          value={newRecurringExpense.name}
+                          onChange={handleNewRecurringExpenseChange}
                           placeholder="Expense name"
                           className="w-full p-2 border rounded"
                         />
@@ -755,15 +1075,15 @@ export default function Home() {
                           <input
                             type="number"
                             name="amount"
-                            value={newExpense.amount || ''}
-                            onChange={handleNewExpenseChange}
+                            value={newRecurringExpense.amount || ''}
+                            onChange={handleNewRecurringExpenseChange}
                             placeholder="Amount"
                             className="flex-1 p-2 border rounded"
                           />
                           <select
                             name="type"
-                            value={newExpense.type}
-                            onChange={handleNewExpenseChange}
+                            value={newRecurringExpense.type}
+                            onChange={handleNewRecurringExpenseChange}
                             className="p-2 border rounded"
                           >
                             <option value="needs">Needs</option>
@@ -783,13 +1103,13 @@ export default function Home() {
                 )}
               </div>
 
-              <button
-                type="submit"
+        <button
+          type="submit"
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 transform transition-all hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
+        >
                 Calculate Budget
-              </button>
-            </form>
+        </button>
+      </form>
           </div>
 
           {/* Results Section */}
@@ -877,27 +1197,44 @@ export default function Home() {
 
                 <div className="flex flex-col items-center justify-center">
                   {getChartData() && (
-                    <div className="w-full max-w-md">
-                      <Pie data={getChartData()!.data} options={getChartData()!.options} />
+                    <div className="w-full max-w-md px-4">
+                      <Pie data={getChartData()!.data} options={{
+                        ...getChartData()!.options,
+                        plugins: {
+                          ...getChartData()!.options.plugins,
+                          legend: {
+                            ...getChartData()!.options.plugins.legend,
+                            position: 'right' as const,
+                            labels: {
+                              ...getChartData()!.options.plugins.legend.labels,
+                              boxWidth: 15,
+                              padding: 15,
+                              font: {
+                                size: 11
+                              }
+                            }
+                          }
+                        }
+                      }} />
                     </div>
                   )}
 
                   {/* AI Budget Coach Section */}
-                  <div className="w-full mt-6">
-                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 shadow-sm">
-                      <div className="flex items-center mb-3">
-                        <span className="text-2xl mr-2">🧠</span>
-                        <h3 className="text-lg font-semibold text-gray-800">AI Budget Coach</h3>
+                  <div className="w-full mt-6 -ml-4">
+                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 shadow-sm min-h-[200px]">
+                      <div className="flex items-center mb-4">
+                        <span className="text-3xl mr-3">🧠</span>
+                        <h3 className="text-xl font-semibold text-gray-800">AI Budget Coach</h3>
                       </div>
                       {history.length > 0 && (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {(() => {
                             const latestEntry = history[0];
                             const { message, emoji, tone } = getAICoachMessage(latestEntry);
                             return (
-                              <div className="flex items-start space-x-3">
-                                <span className="text-2xl">{emoji}</span>
-                                <p className={`text-sm ${tone} leading-relaxed`}>{message}</p>
+                              <div className="flex items-start space-x-4">
+                                <span className="text-3xl">{emoji}</span>
+                                <p className={`text-base ${tone} leading-relaxed`}>{message}</p>
                               </div>
                             );
                           })()}
