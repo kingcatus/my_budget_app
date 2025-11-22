@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, addDays } from 'date-fns';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -85,23 +85,45 @@ export default function Home() {
   }>(null);
 
   const [history, setHistory] = useState<BudgetEntry[]>([]);
+  
+  useEffect(() => {
+    const savedForm = localStorage.getItem("form");
+    const savedResult = localStorage.getItem("result");
+    const savedHistory = localStorage.getItem("history");
+  
+    if (savedForm) setForm(JSON.parse(savedForm));
+    if (savedResult) setResult(JSON.parse(savedResult));
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
+  }, []);
+  
+  useEffect(() => {
+    localStorage.setItem("form", JSON.stringify(form));
+  }, [form]);
+  
+  useEffect(() => {
+    localStorage.setItem("result", JSON.stringify(result));
+  }, [result]);
+  
+  useEffect(() => {
+    localStorage.setItem("history", JSON.stringify(history));
+  }, [history]);
 
-  const dailyQuotes = [
-    "The only way to do great work is to love what you do.",
-    "Success is not final, failure is not fatal: it is the courage to continue that counts.",
-    "The future belongs to those who believe in the beauty of their dreams.",
-    "Your time is limited, don't waste it living someone else's life.",
-    "The best way to predict the future is to create it.",
-    "Don't watch the clock; do what it does. Keep going.",
-    "The only limit to our realization of tomorrow is our doubts of today.",
-    "Believe you can and you're halfway there.",
-    "Everything you've ever wanted is on the other side of fear.",
-    "The harder you work for something, the greater you'll feel when you achieve it."
+  const dailyVerses = [
+    "Trust in the Lord with all your heart and lean not on your own understanding. - Proverbs 3:5",
+    "I can do all this through him who gives me strength. - Philippians 4:13",
+    "For I know the plans I have for you, declares the Lord, plans to prosper you and not to harm you. - Jeremiah 29:11",
+    "Be strong and courageous. Do not be afraid; do not be discouraged, for the Lord your God will be with you. - Joshua 1:9",
+    "Cast all your anxiety on him because he cares for you. - 1 Peter 5:7",
+    "The Lord will fight for you; you need only to be still. - Exodus 14:14",
+    "Do not be anxious about anything, but in every situation, by prayer and petition, with thanksgiving, present your requests to God. - Philippians 4:6",
+    "Commit to the Lord whatever you do, and he will establish your plans. - Proverbs 16:3",
+    "And my God will meet all your needs according to the riches of his glory in Christ Jesus. - Philippians 4:19",
+    "The Lord is my shepherd, I lack nothing. - Psalm 23:1"
   ];
 
   const [isClient, setIsClient] = useState(false);
-  const [dailyQuote, setDailyQuote] = useState("");
-  const [currentMotivationalQuote, setCurrentMotivationalQuote] = useState("");
+  const [dailyVerse, setDailyVerse] = useState("");
+  const [currentVerse, setCurrentVerse] = useState("");
 
   const categoryTags = [
     { id: 'rent', label: 'Rent', color: 'bg-blue-100 text-blue-800' },
@@ -134,13 +156,13 @@ export default function Home() {
 
   useEffect(() => {
     setIsClient(true);
-    setDailyQuote(dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)]);
-    setCurrentMotivationalQuote(motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]);
+    setDailyVerse(dailyVerses[Math.floor(Math.random() * dailyVerses.length)]);
+    setCurrentVerse(dailyVerses[Math.floor(Math.random() * dailyVerses.length)]);
   }, []);
 
-  const refreshQuote = () => {
-    const newQuote = dailyQuotes[Math.floor(Math.random() * dailyQuotes.length)];
-    setDailyQuote(newQuote);
+  const refreshVerse = () => {
+    const newVerse = dailyVerses[Math.floor(Math.random() * dailyVerses.length)];
+    setDailyVerse(newVerse);
   };
 
   useEffect(() => {
@@ -321,7 +343,7 @@ export default function Home() {
       { name: "entertainment", label: "Entertainment & Fun" }
     ],
     savings: [
-      { name: "invest", label: "Investments" },
+      { name: "invest", label: "Robinhood Investment" },
       { name: "emergency", label: "Emergency Fund" }
     ]
   };
@@ -337,7 +359,7 @@ export default function Home() {
         'Transportation',
         'Clothing',
         'Entertainment',
-        'Investments',
+        'Robinhood Investment',
         'Emergency Fund'
       ],
       datasets: [
@@ -409,21 +431,21 @@ export default function Home() {
     return `${value.toFixed(1)}%`;
   };
 
-  const motivationalQuotes = [
-    "Every dollar saved is a step closer to your dreams.",
-    "Small steps in saving lead to giant leaps in financial freedom.",
-    "Your future self will thank you for your smart choices today.",
-    "Budgeting isn't about restriction, it's about making your money work for you.",
-    "Financial success is built one budget at a time.",
-    "The best time to start saving was yesterday. The second best time is now.",
-    "Your budget is your financial roadmap to success.",
-    "Smart spending today creates wealth for tomorrow.",
-    "Every budget is a chance to build a better financial future.",
-    "Your financial goals are within reach, one budget at a time."
+  const weeklyVerses = [
+    "Honor the Lord with your wealth, with the firstfruits of all your crops. - Proverbs 3:9",
+    "Whoever can be trusted with very little can also be trusted with much. - Luke 16:10",
+    "The plans of the diligent lead to profit as surely as haste leads to poverty. - Proverbs 21:5",
+    "Do not store up for yourselves treasures on earth, but store up for yourselves treasures in heaven. - Matthew 6:19-20",
+    "Give, and it will be given to you. A good measure, pressed down, shaken together and running over. - Luke 6:38",
+    "The wise store up choice food and olive oil, but fools gulp theirs down. - Proverbs 21:20",
+    "Better a little with the fear of the Lord than great wealth with turmoil. - Proverbs 15:16",
+    "Keep your lives free from the love of money and be content with what you have. - Hebrews 13:5",
+    "One person gives freely, yet gains even more; another withholds unduly, but comes to poverty. - Proverbs 11:24",
+    "Remember this: Whoever sows sparingly will also reap sparingly, and whoever sows generously will also reap generously. - 2 Corinthians 9:6"
   ];
 
-  const getRandomQuote = () => {
-    return motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
+  const getRandomVerse = () => {
+    return weeklyVerses[Math.floor(Math.random() * weeklyVerses.length)];
   };
 
   const getBiggestCategory = (needs: number, wants: number): string => {
@@ -653,7 +675,7 @@ export default function Home() {
   const renderWeeklyCalendar = () => (
     <div className="bg-white rounded-xl shadow-md p-6 mb-8">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">📅 Weekly Expense Tracker</h2>
+        <h2 className="text-2xl font-bold text-gray-900">📅 Daily Expense Tracker</h2>
         <button
           onClick={createNewWeek}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -707,7 +729,7 @@ export default function Home() {
               </div>
             </div>
 
-            <h3 className="text-lg font-semibold text-gray-800">Add Expense</h3>
+            <h3 className="text-lg font-semibold text-gray-800">Add Daily Expense</h3>
             <div className="space-y-3">
               <input
                 type="date"
@@ -757,38 +779,69 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Expense List */}
+            {/* Daily Expense List */}
             <div className="mt-6">
-              <h4 className="font-medium text-gray-800 mb-3">This Week's Expenses</h4>
-              <div className="space-y-2">
-                {selectedWeek.dailyExpenses.map(expense => (
-                  <div key={expense.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                    <div>
-                      <p className="font-medium">{expense.category}</p>
-                      <p className="text-sm text-gray-600">{expense.description}</p>
-                      <p className="text-xs text-gray-500">
-                        {format(new Date(expense.date), 'MMM dd')}
-                      </p>
+              <h4 className="font-medium text-gray-800 mb-3">Daily Expenses</h4>
+              <div className="space-y-4">
+                {Array.from({ length: 7 }).map((_, index) => {
+                  const day = addDays(new Date(selectedWeek.startDate), index);
+                  const dayExpenses = selectedWeek.dailyExpenses.filter(
+                    expense => expense.date === format(day, 'yyyy-MM-dd')
+                  );
+
+                  return (
+                    <div key={index} className="border rounded-lg p-4">
+                      <h5 className="font-medium text-gray-700 mb-2">
+                        {format(day, 'EEEE, MMMM d')}
+                      </h5>
+                      {dayExpenses.length > 0 ? (
+                        <div className="space-y-2">
+                          {dayExpenses.map(expense => (
+                            <div key={expense.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                              <div>
+                                <p className="font-medium">{expense.category}</p>
+                                <p className="text-sm text-gray-600">{expense.description}</p>
+                              </div>
+                              <div className="flex items-center space-x-4">
+                                <span className="font-medium">${expense.amount.toFixed(2)}</span>
+                                <button
+                                  onClick={() => removeExpense(selectedWeek.id, expense.id)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 text-sm">No expenses recorded for this day</p>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <span className="font-medium">${expense.amount.toFixed(2)}</span>
-                      <button
-                        onClick={() => removeExpense(selectedWeek.id, expense.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Weekly Summary */}
               {selectedWeek.dailyExpenses.length > 0 && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-blue-800 mb-2">Weekly Summary</h4>
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-4">Weekly Summary</h4>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <p className="text-sm text-gray-600">Total Spent</p>
+                      <p className="text-xl font-bold text-blue-900">
+                        ${Object.values(getWeeklyTotals(selectedWeek)).reduce((sum, amount) => sum + amount, 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Total Saved</p>
+                      <p className="text-xl font-bold text-green-600">
+                        ${(selectedWeek.totalBudget - Object.values(getWeeklyTotals(selectedWeek)).reduce((sum, amount) => sum + amount, 0)).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-3 gap-4">
                     {Object.entries(getWeeklyTotals(selectedWeek)).map(([type, amount]) => {
                       const percentages = calculateCategoryPercentages(selectedWeek);
@@ -829,24 +882,25 @@ export default function Home() {
           <div className="w-full max-w-4xl mx-auto mb-8">
             <div className="bg-white p-6 rounded-xl shadow-md relative transform transition-all hover:scale-[1.01]">
               <button
-                onClick={refreshQuote}
+                onClick={refreshVerse}
                 className="absolute top-3 right-3 p-2 text-gray-600 hover:text-purple-600 transition-colors"
-                title="Get new quote"
+                title="Get new verse"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                 </svg>
               </button>
               <div className="text-center">
-                <h2 className="text-lg font-semibold text-gray-800 mb-2">💫 Quote of the Day</h2>
-                <p className="text-gray-700 italic text-lg">"{dailyQuote}"</p>
+                <h2 className="text-lg font-semibold text-gray-800 mb-2">📖 Verse of the Day</h2>
+                <p className="text-gray-700 italic text-lg">"{dailyVerse}"</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Weekly Calendar Section */}
+        {/* Weekly Calendar Section (temporarily disabled)
         {renderWeeklyCalendar()}
+        */}
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
@@ -878,13 +932,13 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Paycheck Amount</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount Made This Week</label>
                   <input
                     type="number"
                     name="paycheck"
                     value={form.paycheck}
                     onChange={handleChange}
-                    placeholder="Enter your paycheck amount"
+                    placeholder="Enter the amount you made this week"
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                     required
                   />
@@ -950,19 +1004,6 @@ export default function Home() {
           />
                     </div>
                   ))}
-                  <div className="mt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Weekly Savings Goal
-                    </label>
-                    <input
-                      type="number"
-                      name="goalTarget"
-                      value={form.goalTarget}
-                      onChange={handleChange}
-                      placeholder="Enter your target amount for next week"
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -979,128 +1020,6 @@ export default function Home() {
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors min-h-[80px] resize-y"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Spending Categories
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {categoryTags.map(tag => (
-                      <label
-                        key={tag.id}
-                        className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
-                          form.tags.includes(tag.id) ? tag.color : 'bg-gray-50 hover:bg-gray-100'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={form.tags.includes(tag.id)}
-                          onChange={() => handleTagChange(tag.id)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm">{tag.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="border rounded-lg p-4 bg-slate-50">
-                <button
-                  type="button"
-                  onClick={() => setIsRecurringExpensesOpen(!isRecurringExpensesOpen)}
-                  className="w-full flex items-center justify-between text-left font-medium text-gray-700"
-                >
-                  <span>🔄 Recurring Expenses</span>
-                  <span className="text-sm text-gray-500">
-                    Total: ${getTotalRecurringExpenses().toFixed(2)}
-                  </span>
-                </button>
-
-                {isRecurringExpensesOpen && (
-                  <div className="mt-4 space-y-4">
-                    {recurringExpenses.length > 0 && (
-                      <div className="space-y-2">
-                        {recurringExpenses.map(expense => (
-                          <div key={expense.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                            <div className="flex-1">
-                              <input
-                                type="text"
-                                value={expense.name}
-                                onChange={(e) => updateRecurringExpense(expense.id, { name: e.target.value })}
-                                className="w-full p-1 border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none"
-                              />
-                              <div className="flex items-center space-x-2 mt-1">
-                                <input
-                                  type="number"
-                                  value={expense.amount}
-                                  onChange={(e) => updateRecurringExpense(expense.id, { amount: parseFloat(e.target.value) || 0 })}
-                                  className="w-24 p-1 border rounded"
-                                />
-                                <select
-                                  value={expense.type}
-                                  onChange={(e) => updateRecurringExpense(expense.id, { type: e.target.value as 'needs' | 'wants' })}
-                                  className="p-1 border rounded"
-                                >
-                                  <option value="needs">Needs</option>
-                                  <option value="wants">Wants</option>
-                                </select>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeRecurringExpense(expense.id)}
-                              className="ml-2 text-red-600 hover:text-red-800"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="p-3 bg-white rounded border">
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          name="name"
-                          value={newRecurringExpense.name}
-                          onChange={handleNewRecurringExpenseChange}
-                          placeholder="Expense name"
-                          className="w-full p-2 border rounded"
-                        />
-                        <div className="flex space-x-2">
-                          <input
-                            type="number"
-                            name="amount"
-                            value={newRecurringExpense.amount || ''}
-                            onChange={handleNewRecurringExpenseChange}
-                            placeholder="Amount"
-                            className="flex-1 p-2 border rounded"
-                          />
-                          <select
-                            name="type"
-                            value={newRecurringExpense.type}
-                            onChange={handleNewRecurringExpenseChange}
-                            className="p-2 border rounded"
-                          >
-                            <option value="needs">Needs</option>
-                            <option value="wants">Wants</option>
-                          </select>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addRecurringExpense}
-                          className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-                        >
-                          Add Recurring Expense
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
         <button
@@ -1116,22 +1035,15 @@ export default function Home() {
           {result && (
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-medium text-blue-800">Projected Total After Paycheck</h3>
-                    <p className="text-3xl font-bold text-blue-900">${result.projectedTotal.toFixed(2)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-600">Budget Date</p>
-                    <p className="font-medium text-blue-800">
-                      {new Date(form.date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </div>
+                <div className="text-center">
+                  <p className="text-2xl font-semibold text-blue-800">
+                    {new Date(form.date).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
                 </div>
               </div>
 
@@ -1139,10 +1051,6 @@ export default function Home() {
                 <div className="mb-4 p-3 bg-purple-50 rounded">
                   <h3 className="font-medium text-purple-800 mb-2">Weekly Goal Progress</h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Desired Amount for Next Week</p>
-                      <p className="text-xl font-bold text-purple-900">${parseFloat(form.goalTarget).toFixed(2)}</p>
-                    </div>
                     <div>
                       <p className="text-sm text-gray-600">Remaining Balance</p>
                       <p className="text-xl font-bold text-purple-900">
@@ -1152,12 +1060,6 @@ export default function Home() {
                     <div>
                       <p className="text-sm text-gray-600">Total Spent This Week</p>
                       <p className="text-xl font-bold text-purple-900">${(result.actual.needs.total + result.actual.wants.total).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Hours Needed to Work</p>
-                      <p className={`text-xl font-bold ${parseFloat(form.goalTarget) > ((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total)) ? 'text-red-600' : 'text-green-600'}`}>
-                        {Math.ceil(Math.max(0, parseFloat(form.goalTarget) - ((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total))) / 14)} hours
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -1360,30 +1262,9 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
-                            <p className="text-sm text-gray-700 italic">"{currentMotivationalQuote}"</p>
+                            <p className="text-sm text-gray-700 italic">"{isClient ? getRandomVerse() : ''}"</p>
                           </div>
                         </div>
-
-                        {/* Add Recurring Expenses display */}
-                        {entry.recurringExpenses && entry.recurringExpenses.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <h4 className="text-sm font-medium text-gray-700 mb-2">Recurring Expenses</h4>
-                            <div className="space-y-2">
-                              {entry.recurringExpenses.map(expense => (
-                                <div key={expense.id} className="flex justify-between items-center text-sm">
-                                  <span className="text-gray-600">{expense.name}</span>
-                                  <span className="font-medium">${expense.amount.toFixed(2)}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                <span className="font-medium text-gray-700">Total Recurring</span>
-                                <span className="font-bold text-gray-900">
-                                  ${entry.recurringExpenses.reduce((sum, exp) => sum + exp.amount, 0).toFixed(2)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
 
                         {/* Add Notes and Tags display */}
                         {(entry.notes || entry.tags?.length) && (
