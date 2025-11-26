@@ -1175,10 +1175,10 @@ export default function Home() {
               ) : (
                 <div className="space-y-6">
                   {history.map((entry, index) => {
-                    const totalIncome = parseFloat(entry.paycheck);
-                    const needsPercentage = (entry.needs.total / totalIncome) * 100;
-                    const wantsPercentage = (entry.wants.total / totalIncome) * 100;
-                    const savingsPercentage = (entry.savings.total / totalIncome) * 100;
+                    const totalAvailable = parseFloat(entry.totalMoney) + parseFloat(entry.paycheck);
+                    const needsPercentage = (entry.needs.total / totalAvailable) * 100;
+                    const wantsPercentage = (entry.wants.total / totalAvailable) * 100;
+                    const savingsPercentage = (entry.savings.total / totalAvailable) * 100;
 
                     const needsStatus = getCategoryStatus(needsPercentage, 50);
                     const wantsStatus = getCategoryStatus(wantsPercentage, 30);
