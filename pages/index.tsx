@@ -24,6 +24,7 @@ interface BudgetEntry {
   notes?: string;
   tags?: string[];
   recurringExpenses: RecurringExpense[];
+  verse?: string;
 }
 
 interface DailyExpense {
@@ -303,7 +304,8 @@ export default function Home() {
       goalTarget: form.goalTarget,
       notes: form.notes,
       tags: form.tags,
-      recurringExpenses: recurringExpenses
+      recurringExpenses: recurringExpenses,
+      verse: currentVerse
     });
 
     // Reset notes and tags after submission
@@ -393,7 +395,7 @@ export default function Home() {
     const options = {
       plugins: {
         legend: {
-          position: 'right' as const,
+          position: 'bottom' as const,
           labels: {
             font: {
               size: 12
@@ -1099,25 +1101,27 @@ export default function Home() {
 
                 <div className="flex flex-col items-center justify-center">
                   {getChartData() && (
-                    <div className="w-full max-w-md px-4">
-                      <Pie data={getChartData()!.data} options={{
-                        ...getChartData()!.options,
-                        plugins: {
-                          ...getChartData()!.options.plugins,
-                          legend: {
-                            ...getChartData()!.options.plugins.legend,
-                            position: 'right' as const,
-                            labels: {
-                              ...getChartData()!.options.plugins.legend.labels,
-                              boxWidth: 15,
-                              padding: 15,
-                              font: {
-                                size: 11
+                    <div className="flex flex-col items-center w-full">
+                      <div className="w-[250px] md:w-[300px] mx-auto">
+                        <Pie data={getChartData()!.data} options={{
+                          ...getChartData()!.options,
+                          plugins: {
+                            ...getChartData()!.options.plugins,
+                            legend: {
+                              ...getChartData()!.options.plugins.legend,
+                              position: 'bottom' as const,
+                              labels: {
+                                ...getChartData()!.options.plugins.legend.labels,
+                                boxWidth: 15,
+                                padding: 15,
+                                font: {
+                                  size: 11
+                                }
                               }
                             }
                           }
-                        }
-                      }} />
+                        }} />
+                      </div>
                     </div>
                   )}
 
@@ -1171,7 +1175,7 @@ export default function Home() {
               ) : (
                 <div className="space-y-6">
                   {history.map((entry, index) => {
-                    const totalIncome = parseFloat(entry.totalMoney) + parseFloat(entry.paycheck);
+                    const totalIncome = parseFloat(entry.paycheck);
                     const needsPercentage = (entry.needs.total / totalIncome) * 100;
                     const wantsPercentage = (entry.wants.total / totalIncome) * 100;
                     const savingsPercentage = (entry.savings.total / totalIncome) * 100;
@@ -1200,10 +1204,16 @@ export default function Home() {
                           )}
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">Income</p>
-                            <p className="font-medium">${totalIncome.toFixed(2)}</p>
-                          </div>
+                        <div>
+  <p className="text-gray-600">Income (This Week)</p>
+  <p className="font-medium">
+    ${parseFloat(entry.paycheck).toFixed(2)}
+  </p>
+
+  <p className="text-xs text-gray-500 mt-1">
+    Starting Balance: ${parseFloat(entry.totalMoney).toFixed(2)}
+  </p>
+</div>
                           <div>
                             <div className="flex items-center justify-between">
                               <p className="text-gray-600">Needs</p>
@@ -1262,7 +1272,7 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
-                            <p className="text-sm text-gray-700 italic">"{isClient ? getRandomVerse() : ''}"</p>
+                            <p className="text-sm text-gray-700 italic">"{entry.verse || ''}"</p>
                           </div>
                         </div>
 
