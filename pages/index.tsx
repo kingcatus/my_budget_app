@@ -86,7 +86,7 @@ export default function Home() {
   }>(null);
 
   const [history, setHistory] = useState<BudgetEntry[]>([]);
-  
+
   useEffect(() => {
     const savedForm = localStorage.getItem("form");
     const savedResult = localStorage.getItem("result");
@@ -200,6 +200,7 @@ export default function Home() {
         : [...prev.tags, tagId]
     }));
   };
+
 
   const handleNewRecurringExpenseChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -418,14 +419,27 @@ export default function Home() {
     return { data, options };
   };
 
-  const getCategoryStatus = (actual: number, target: number): { text: string; color: string; icon: string } => {
+  const getCategoryStatus = (
+    actual: number,
+    target: number,
+    category: 'needs' | 'wants' | 'savings'
+  ): { text: string; color: string; icon: string } => {
     const difference = actual - target;
-    if (Math.abs(difference) <= 5) {
-      return { text: "On Target", color: "text-yellow-600 bg-yellow-50", icon: "✅" };
-    } else if (difference > 5) {
-      return { text: "Over", color: "text-red-600 bg-red-50", icon: "⚠️" };
-    } else {
+
+    if (category === 'savings') {
+      if (actual >= target * 0.9) {
+        return { text: "On Target", color: "text-green-600 bg-green-50", icon: "✅" };
+      } else {
+        return { text: "Under", color: "text-yellow-600 bg-yellow-50", icon: "⚠️" };
+      }
+    }
+
+    if (actual <= target * 1.1 && actual >= target * 0.9) {
+      return { text: "On Target", color: "text-yellow-600 bg-yellow-50", icon: "⚠️" };
+    } else if (actual < target * 0.9) {
       return { text: "Under", color: "text-green-600 bg-green-50", icon: "💸" };
+    } else {
+      return { text: "Over", color: "text-red-600 bg-red-50", icon: "⚠️" };
     }
   };
 
@@ -867,11 +881,17 @@ export default function Home() {
     </div>
   );
 
+  // Calculate stats for overview panel
+  const totalAvailable = parseFloat(form.totalMoney || '0') + parseFloat(form.paycheck || '0');
+  const totalSpent = result ? (result.actual.needs.total + result.actual.wants.total) : 0;
+  const totalSaved = result ? result.actual.savings.total : 0;
+  const remainingBalance = totalAvailable - totalSpent;
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Header Section */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white text-3xl mb-4 shadow-lg">
             💸
           </div>
@@ -879,79 +899,152 @@ export default function Home() {
           <p className="text-lg text-gray-600">Take Control of Your Finances, One Week At a Time</p>
         </div>
 
-        {/* Quote of the Day Section */}
-        {isClient && (
-          <div className="w-full max-w-4xl mx-auto mb-8">
-            <div className="bg-white p-6 rounded-xl shadow-md relative transform transition-all hover:scale-[1.01]">
-              <button
-                onClick={refreshVerse}
-                className="absolute top-3 right-3 p-2 text-gray-600 hover:text-purple-600 transition-colors"
-                title="Get new verse"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                </svg>
-              </button>
+        {/* Top Overview Panel */}
+        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Today's Date */}
+            <div className="lg:col-span-1">
+              <p className="text-sm text-gray-600 mb-1">Today's Date</p>
+              <p className="text-lg font-semibold text-gray-900">
+                {new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
+              </p>
+            </div>
+
+            {/* Verse of the Day */}
+            {isClient && (
+              <div className="lg:col-span-1">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-gray-600">📖 Verse of the Day</p>
+                  <button
+                    onClick={refreshVerse}
+                    className="p-1 text-gray-600 hover:text-purple-600 transition-colors"
+                    title="Get new verse"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                <p className="text-sm text-gray-700 italic line-clamp-2">"{dailyVerse}"</p>
+              </div>
+            )}
+
+            {/* Total Available Money */}
+            <div className="lg:col-span-1">
+              <p className="text-sm text-gray-600 mb-1">Total Available Money</p>
+              <p className="text-2xl font-bold text-blue-600">${totalAvailable.toFixed(2)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {form.totalMoney && form.paycheck ? (
+                  <>${parseFloat(form.totalMoney).toFixed(2)} + ${parseFloat(form.paycheck).toFixed(2)}</>
+                ) : (
+                  'Enter starting balance and income'
+                )}
+              </p>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="lg:col-span-1 grid grid-cols-3 gap-3">
               <div className="text-center">
-                <h2 className="text-lg font-semibold text-gray-800 mb-2">📖 Verse of the Day</h2>
-                <p className="text-gray-700 italic text-lg">"{dailyVerse}"</p>
+                <p className="text-xs text-gray-600 mb-1">Spent</p>
+                <p className="text-lg font-semibold text-red-600">${totalSpent.toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-gray-600 mb-1">Saved</p>
+                <p className="text-lg font-semibold text-green-600">${totalSaved.toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-gray-600 mb-1">Remaining</p>
+                <p className="text-lg font-semibold text-purple-600">${remainingBalance.toFixed(2)}</p>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Weekly Calendar Section (temporarily disabled)
         {renderWeeklyCalendar()}
         */}
 
-        {/* Main Content */}
+        {/* Main Two-Column Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
-          {/* Form Section */}
-          <div className="bg-white rounded-xl shadow-md p-6">
+          {/* LEFT COLUMN */}
+          <div className="space-y-6">
+            {/* Tag Selector */}
+            <div className="bg-white rounded-xl shadow-md p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Tags</h2>
+              <div className="flex flex-wrap gap-2">
+                {categoryTags.map(tag => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => handleTagChange(tag.id)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      form.tags.includes(tag.id)
+                        ? `${tag.color} ring-2 ring-offset-2 ring-blue-500`
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {tag.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Budget Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={form.date}
-                    onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Total Money</label>
-                  <input
-                    type="number"
-                    name="totalMoney"
-                    value={form.totalMoney}
-                    onChange={handleChange}
-                    placeholder="Enter your current total money"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount Made This Week</label>
-                  <input
-                    type="number"
-                    name="paycheck"
-                    value={form.paycheck}
-                    onChange={handleChange}
-                    placeholder="Enter the amount you made this week"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    required
-                  />
+              {/* Basic Info Cards */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Budget Information</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Budget Date</label>
+                    <input
+                      type="date"
+                      name="date"
+                      value={form.date}
+                      onChange={handleChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Starting Balance</label>
+                    <input
+                      type="number"
+                      name="totalMoney"
+                      value={form.totalMoney}
+                      onChange={handleChange}
+                      placeholder="Enter your current total money"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Income (This Week)</label>
+                    <input
+                      type="number"
+                      name="paycheck"
+                      value={form.paycheck}
+                      onChange={handleChange}
+                      placeholder="Enter the amount you made this week"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-6">
-                <div className="p-4 bg-blue-50 rounded">
-                  <h3 className="text-lg font-medium text-blue-800 mb-3">Essential Needs (50%)</h3>
+              {/* Needs Card */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="p-4 bg-blue-50 rounded-lg mb-4">
+                  <h3 className="text-lg font-medium text-blue-800">Essential Needs (50%)</h3>
+                </div>
+                <div className="space-y-4">
                   {categories.needs.map(({ name, label }) => (
-                    <div key={name} className="mb-3">
+                    <div key={name}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {label}
                       </label>
@@ -967,11 +1060,16 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+              </div>
 
-                <div className="p-4 bg-green-50 rounded">
-                  <h3 className="text-lg font-medium text-green-800 mb-3">Wants (30%)</h3>
+              {/* Wants Card */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="p-4 bg-green-50 rounded-lg mb-4">
+                  <h3 className="text-lg font-medium text-green-800">Wants (30%)</h3>
+                </div>
+                <div className="space-y-4">
                   {categories.wants.map(({ name, label }) => (
-                    <div key={name} className="mb-3">
+                    <div key={name}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {label}
                       </label>
@@ -987,67 +1085,76 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
+              </div>
 
-                <div className="p-4 bg-purple-50 rounded">
-                  <h3 className="text-lg font-medium text-purple-800 mb-3">Savings & Investments (20%)</h3>
+              {/* Savings Card */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="p-4 bg-purple-50 rounded-lg mb-4">
+                  <h3 className="text-lg font-medium text-purple-800">Savings & Investments (20%)</h3>
+                </div>
+                <div className="space-y-4">
                   {categories.savings.map(({ name, label }) => (
-                    <div key={name} className="mb-3">
+                    <div key={name}>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {label}
                       </label>
-          <input
-            type="number"
+                      <input
+                        type="number"
                         name={name}
                         value={form[name as keyof typeof form]}
-            onChange={handleChange}
+                        onChange={handleChange}
                         placeholder={`Enter ${label.toLowerCase()} amount`}
                         className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-            required
-          />
+                        required
+                      />
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    name="notes"
-                    value={form.notes}
-                    onChange={handleChange}
-                    placeholder="Add notes about this week's budget (optional)"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors min-h-[80px] resize-y"
-                  />
+              {/* Notes and Submit */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      name="notes"
+                      value={form.notes}
+                      onChange={handleChange}
+                      placeholder="Add notes about this week's budget (optional)"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors min-h-[80px] resize-y"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 transform transition-all hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    Calculate Budget
+                  </button>
                 </div>
               </div>
-
-        <button
-          type="submit"
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-medium hover:from-blue-700 hover:to-blue-800 transform transition-all hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-                Calculate Budget
-        </button>
-      </form>
+            </form>
           </div>
 
-          {/* Results Section */}
+          {/* RIGHT COLUMN */}
           {result && (
-            <div className="bg-white rounded-xl shadow-md p-6">
-              <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-                <div className="text-center">
-                  <p className="text-2xl font-semibold text-blue-800">
-                    {new Date(form.date).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
+            <div className="space-y-6">
+              {/* Results Section */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-2xl font-semibold text-blue-800">
+                      {new Date(form.date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
               {form.goalTarget && (
                 <div className="mb-4 p-3 bg-purple-50 rounded">
@@ -1151,6 +1258,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            </div>
           )}
         </div>
 
@@ -1180,9 +1288,9 @@ export default function Home() {
                     const wantsPercentage = (entry.wants.total / totalAvailable) * 100;
                     const savingsPercentage = (entry.savings.total / totalAvailable) * 100;
 
-                    const needsStatus = getCategoryStatus(needsPercentage, 50);
-                    const wantsStatus = getCategoryStatus(wantsPercentage, 30);
-                    const savingsStatus = getCategoryStatus(savingsPercentage, 20);
+                    const needsStatus = getCategoryStatus(needsPercentage, 50, 'needs');
+                    const wantsStatus = getCategoryStatus(wantsPercentage, 30, 'wants');
+                    const savingsStatus = getCategoryStatus(savingsPercentage, 20, 'savings');
 
                     const totalSpent = entry.needs.total + entry.wants.total;
                     const biggestCategory = getBiggestCategory(entry.needs.total, entry.wants.total);
@@ -1277,7 +1385,7 @@ export default function Home() {
                         </div>
 
                         {/* Add Notes and Tags display */}
-                        {(entry.notes || entry.tags?.length) && (
+                        {(entry.notes || (entry.tags && entry.tags.length > 0)) && (
                           <div className="mt-4 pt-4 border-t border-gray-200">
                             {entry.notes && (
                               <p className="text-gray-600 italic mb-2">"{entry.notes}"</p>
