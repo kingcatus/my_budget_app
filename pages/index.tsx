@@ -85,6 +85,8 @@ export default function Home() {
     projectedTotal: number;
   }>(null);
 
+  const [isReportVisible, setIsReportVisible] = useState(false);
+
   const [history, setHistory] = useState<BudgetEntry[]>([]);
 
   useEffect(() => {
@@ -238,16 +240,25 @@ export default function Home() {
     return recurringExpenses.reduce((total, expense) => total + expense.amount, 0);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const totalIncome = parseFloat(form.totalMoney) + parseFloat(form.paycheck);
     
-    // Calculate totals for each category
-    const needsTotal = parseFloat(form.food) + parseFloat(form.rent) + parseFloat(form.utilities);
-    const wantsTotal = parseFloat(form.uber) + parseFloat(form.clothes) + parseFloat(form.entertainment);
-    const savingsTotal = parseFloat(form.invest) + parseFloat(form.emergency);
+    // ============================================
+    // STEP 1: IMMEDIATE CALCULATIONS (SYNCHRONOUS)
+    // ============================================
+    // All calculations happen immediately, before any async operations
+    
+    // Safety checks: Convert all inputs to numbers with fallback to 0
+    const startingBalance = parseFloat(form.totalMoney) || 0;
+    const amountMadeThisWeek = parseFloat(form.paycheck) || 0;
+    const totalIncome = startingBalance + amountMadeThisWeek;
+    
+    // Calculate totals for each category with safety checks
+    const needsTotal = (parseFloat(form.food) || 0) + (parseFloat(form.rent) || 0) + (parseFloat(form.utilities) || 0);
+    const wantsTotal = (parseFloat(form.uber) || 0) + (parseFloat(form.clothes) || 0) + (parseFloat(form.entertainment) || 0);
+    const savingsTotal = (parseFloat(form.invest) || 0) + (parseFloat(form.emergency) || 0);
 
-    // Calculate suggested budget based on total income
+    // Calculate suggested budget based on 50/30/20 rule
     const suggested = {
       needs: {
         total: totalIncome * 0.5,
@@ -274,47 +285,146 @@ export default function Home() {
       }
     };
 
-    const response = await fetch("/api/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        income: totalIncome.toString(),
-        needs: needsTotal.toString(),
-        wants: wantsTotal.toString(),
-        savings: savingsTotal.toString()
-      }),
-    });
+    // Calculate actual values from form inputs
+    const actual = {
+      needs: {
+        total: needsTotal,
+        breakdown: {
+          food: parseFloat(form.food) || 0,
+          rent: parseFloat(form.rent) || 0,
+          utilities: parseFloat(form.utilities) || 0
+        }
+      },
+      wants: {
+        total: wantsTotal,
+        breakdown: {
+          uber: parseFloat(form.uber) || 0,
+          clothes: parseFloat(form.clothes) || 0,
+          entertainment: parseFloat(form.entertainment) || 0
+        }
+      },
+      savings: {
+        total: savingsTotal,
+        breakdown: {
+          invest: parseFloat(form.invest) || 0,
+          emergency: parseFloat(form.emergency) || 0
+        }
+      }
+    };
 
-    const data = await response.json();
+    // Calculate differences between actual and suggested (for Weekly Summary Report)
+    const comparison = {
+      needsDiff: actual.needs.total - suggested.needs.total,
+      wantsDiff: actual.wants.total - suggested.wants.total,
+      savingsDiff: actual.savings.total - suggested.savings.total
+    };
+
+    // ============================================
+    // STEP 2: IMMEDIATE UI UPDATE (SYNCHRONOUS)
+    // ============================================
+    // Update UI state immediately with calculated results
+    // This happens BEFORE any API calls, ensuring instant UI feedback
     const result = {
-      ...data,
       suggested,
+      actual,
+      comparison,
       projectedTotal: totalIncome
     };
     setResult(result);
-
-    // Save to history
-    saveToHistory({
+    
+    // ============================================
+    // STEP 2.5: ADD CURRENT CALCULATION TO HISTORY
+    // ============================================
+    // Create a BudgetEntry from the calculated result to display in Past Budgets
+    const newBudgetEntry: BudgetEntry = {
       date: form.date,
-      totalMoney: form.totalMoney,
-      paycheck: form.paycheck,
-      needs: result.actual.needs,
-      wants: result.actual.wants,
-      savings: result.actual.savings,
-      goalTarget: form.goalTarget,
-      notes: form.notes,
-      tags: form.tags,
+      totalMoney: form.totalMoney || "0",
+      paycheck: form.paycheck || "0",
+      needs: actual.needs,
+      wants: actual.wants,
+      savings: actual.savings,
+      goalTarget: form.goalTarget || "",
+      notes: form.notes || undefined,
+      tags: form.tags || [],
       recurringExpenses: recurringExpenses,
-      verse: currentVerse
-    });
+      verse: getRandomVerse()
+    };
+    
+    // Add the new entry to the beginning of history
+    const newHistory = [newBudgetEntry, ...history];
+    setHistory(newHistory);
+    localStorage.setItem('budgetHistory', JSON.stringify(newHistory));
+    
+    // ============================================
+    // STEP 2.6: MAKE REPORT VISIBLE
+    // ============================================
+    setIsReportVisible(true);
+    
+    // ============================================
+    // STEP 3: SAVE TO DATABASE (ASYNCHRONOUS - NON-BLOCKING)
+    // ============================================
+    // This happens after UI is updated and does not affect UI display
+    // Wrapped in async function to run in background without blocking
+    const budgetEntry = {
+      budget_date: form.date,
+      income: amountMadeThisWeek, // Weekly income (already safely converted)
+      needs_data: {
+        food: parseFloat(form.food) || 0,
+        rent: parseFloat(form.rent) || 0,
+        utilities: parseFloat(form.utilities) || 0
+      },
+      wants_data: {
+        uber: parseFloat(form.uber) || 0,
+        clothes: parseFloat(form.clothes) || 0,
+        entertainment: parseFloat(form.entertainment) || 0
+      },
+      savings_data: {
+        invest: parseFloat(form.invest) || 0,
+        emergency: parseFloat(form.emergency) || 0
+      },
+      notes: form.notes || null
+    };
 
-    // Reset notes and tags after submission
-    setForm(prev => ({
-      ...prev,
-      notes: "",
-      tags: []
-    }));
+    // Save to backend API (fire-and-forget, non-blocking)
+    // This runs asynchronously without blocking the UI update
+    // Currently commented out - uncomment when API is ready
+    /*
+    (async () => {
+      try {
+        const apiResponse = await fetch("http://localhost:5000/api/budgets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(budgetEntry)
+        });
+        
+        if (apiResponse.status === 201) {
+          const apiData = await apiResponse.json();
+          console.log("Budget entry saved successfully with ID:", apiData.id);
+          
+          // Reset notes and tags after successful submission
+          setForm(prev => ({
+            ...prev,
+            notes: "",
+            tags: []
+          }));
+        } else {
+          const errorData = await apiResponse.json();
+          console.error("Failed to save budget entry:", errorData);
+        }
+      } catch (error) {
+        console.error("Error saving budget entry to API:", error);
+      }
+    })();
+    */
+    
+    // ============================================
+    // STEP 4: FUNCTION COMPLETION - STATE IS ALREADY SET
+    // ============================================
+    // The result state was set in STEP 2 (line 328: setResult(result))
+    // This ensures the report is visible immediately after calculation
+    // No early exits - function completes successfully
   };
 
   const getDifferenceColor = (diff: number, category: 'needs' | 'wants' | 'savings') => {
@@ -368,14 +478,14 @@ export default function Home() {
       datasets: [
         {
           data: [
-            result.actual.needs.breakdown.food,
-            result.actual.needs.breakdown.rent,
-            result.actual.needs.breakdown.utilities,
-            result.actual.wants.breakdown.uber,
-            result.actual.wants.breakdown.clothes,
-            result.actual.wants.breakdown.entertainment,
-            result.actual.savings.breakdown.invest,
-            result.actual.savings.breakdown.emergency
+            result?.actual?.needs?.breakdown?.food || 0,
+            result?.actual?.needs?.breakdown?.rent || 0,
+            result?.actual?.needs?.breakdown?.utilities || 0,
+            result?.actual?.wants?.breakdown?.uber || 0,
+            result?.actual?.wants?.breakdown?.clothes || 0,
+            result?.actual?.wants?.breakdown?.entertainment || 0,
+            result?.actual?.savings?.breakdown?.invest || 0,
+            result?.actual?.savings?.breakdown?.emergency || 0
           ],
           backgroundColor: [
             '#60A5FA', // Food - Light Blue
@@ -448,7 +558,7 @@ export default function Home() {
   };
 
   const weeklyVerses = [
-    "Honor the Lord with your wealth, with the firstfruits of all your crops. - Proverbs 3:9",
+    "Honor the Lord with your wealth, with the first fruits of all your crops. - Proverbs 3:9",
     "Whoever can be trusted with very little can also be trusted with much. - Luke 16:10",
     "The plans of the diligent lead to profit as surely as haste leads to poverty. - Proverbs 21:5",
     "Do not store up for yourselves treasures on earth, but store up for yourselves treasures in heaven. - Matthew 6:19-20",
@@ -1139,7 +1249,7 @@ export default function Home() {
           </div>
 
           {/* RIGHT COLUMN */}
-          {result && (
+          {isReportVisible && result && (
             <div className="space-y-6">
               {/* Results Section */}
               <div className="bg-white rounded-xl shadow-md p-6">
@@ -1163,12 +1273,12 @@ export default function Home() {
                     <div>
                       <p className="text-sm text-gray-600">Remaining Balance</p>
                       <p className="text-xl font-bold text-purple-900">
-                        ${((parseFloat(form.totalMoney) + parseFloat(form.paycheck)) - (result.actual.needs.total + result.actual.wants.total)).toFixed(2)}
+                        ${(((parseFloat(form.totalMoney) || 0) + (parseFloat(form.paycheck) || 0)) - ((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0))).toFixed(2)}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Total Spent This Week</p>
-                      <p className="text-xl font-bold text-purple-900">${(result.actual.needs.total + result.actual.wants.total).toFixed(2)}</p>
+                      <p className="text-xl font-bold text-purple-900">${((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0)).toFixed(2)}</p>
                     </div>
                   </div>
                 </div>
@@ -1178,29 +1288,29 @@ export default function Home() {
                 <div>
                   <h2 className="text-xl font-semibold mb-2">Suggested Budget (50/30/20 Rule)</h2>
                   <ul className="space-y-1">
-                    <li>🧾 Needs: <strong>${result.suggested.needs.total.toFixed(2)}</strong></li>
-                    <li>🎈 Wants: <strong>${result.suggested.wants.total.toFixed(2)}</strong></li>
-                    <li>💰 Savings: <strong>${result.suggested.savings.total.toFixed(2)}</strong></li>
+                    <li>🧾 Needs: <strong>${(result?.suggested?.needs?.total || 0).toFixed(2)}</strong></li>
+                    <li>🎈 Wants: <strong>${(result?.suggested?.wants?.total || 0).toFixed(2)}</strong></li>
+                    <li>💰 Savings: <strong>${(result?.suggested?.savings?.total || 0).toFixed(2)}</strong></li>
                   </ul>
 
                   <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
                   <ul className="space-y-1">
                     <li className="flex justify-between">
                       <span>Needs Difference:</span>
-                      <span className={getDifferenceColor(result.comparison.needsDiff, 'needs')}>
-                        {formatDifference(result.comparison.needsDiff, 'needs')}
+                      <span className={getDifferenceColor(result?.comparison?.needsDiff || 0, 'needs')}>
+                        {formatDifference(result?.comparison?.needsDiff || 0, 'needs')}
                       </span>
                     </li>
                     <li className="flex justify-between">
                       <span>Wants Difference:</span>
-                      <span className={getDifferenceColor(result.comparison.wantsDiff, 'wants')}>
-                        {formatDifference(result.comparison.wantsDiff, 'wants')}
+                      <span className={getDifferenceColor(result?.comparison?.wantsDiff || 0, 'wants')}>
+                        {formatDifference(result?.comparison?.wantsDiff || 0, 'wants')}
                       </span>
                     </li>
                     <li className="flex justify-between">
                       <span>Savings Difference:</span>
-                      <span className={getDifferenceColor(result.comparison.savingsDiff, 'savings')}>
-                        {formatDifference(result.comparison.savingsDiff, 'savings')}
+                      <span className={getDifferenceColor(result?.comparison?.savingsDiff || 0, 'savings')}>
+                        {formatDifference(result?.comparison?.savingsDiff || 0, 'savings')}
                       </span>
                     </li>
                   </ul>
@@ -1239,10 +1349,11 @@ export default function Home() {
                         <span className="text-3xl mr-3">🧠</span>
                         <h3 className="text-xl font-semibold text-gray-800">AI Budget Coach</h3>
                       </div>
-                      {history.length > 0 && (
+                      {Array.isArray(history) && history.length > 0 && (
                         <div className="space-y-4">
                           {(() => {
                             const latestEntry = history[0];
+                            if (!latestEntry) return null;
                             const { message, emoji, tone } = getAICoachMessage(latestEntry);
                             return (
                               <div className="flex items-start space-x-4">
@@ -1263,12 +1374,12 @@ export default function Home() {
         </div>
 
         {/* History Section */}
-        {result && (
+        {isReportVisible && result && (
           <div className="mt-12 max-w-7xl mx-auto">
             <div className="bg-white rounded-xl shadow-md p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">📅 Past Budgets</h2>
-                {history.length > 0 && (
+                {Array.isArray(history) && history.length > 0 && (
                   <button
                     onClick={clearHistory}
                     className="px-4 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
@@ -1278,22 +1389,23 @@ export default function Home() {
                 )}
               </div>
 
-              {history.length === 0 ? (
+              {!Array.isArray(history) || history.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No past budgets recorded yet.</p>
               ) : (
                 <div className="space-y-6">
                   {history.map((entry, index) => {
-                    const totalAvailable = parseFloat(entry.totalMoney) + parseFloat(entry.paycheck);
-                    const needsPercentage = (entry.needs.total / totalAvailable) * 100;
-                    const wantsPercentage = (entry.wants.total / totalAvailable) * 100;
-                    const savingsPercentage = (entry.savings.total / totalAvailable) * 100;
+                    const totalAvailable = (parseFloat(entry.totalMoney) || 0) + (parseFloat(entry.paycheck) || 0);
+                    const safeTotalAvailable = totalAvailable > 0 ? totalAvailable : 1; // Prevent division by zero
+                    const needsPercentage = ((entry.needs?.total || 0) / safeTotalAvailable) * 100;
+                    const wantsPercentage = ((entry.wants?.total || 0) / safeTotalAvailable) * 100;
+                    const savingsPercentage = ((entry.savings?.total || 0) / safeTotalAvailable) * 100;
 
                     const needsStatus = getCategoryStatus(needsPercentage, 50, 'needs');
                     const wantsStatus = getCategoryStatus(wantsPercentage, 30, 'wants');
                     const savingsStatus = getCategoryStatus(savingsPercentage, 20, 'savings');
 
-                    const totalSpent = entry.needs.total + entry.wants.total;
-                    const biggestCategory = getBiggestCategory(entry.needs.total, entry.wants.total);
+                    const totalSpent = (entry.needs?.total || 0) + (entry.wants?.total || 0);
+                    const biggestCategory = getBiggestCategory(entry.needs?.total || 0, entry.wants?.total || 0);
 
                     return (
                       <div key={index} className="bg-slate-50 rounded-lg p-6 transform transition-all hover:scale-[1.01]">
@@ -1307,7 +1419,7 @@ export default function Home() {
                           </h3>
                           {entry.goalTarget && (
                             <span className="text-sm text-purple-600">
-                              Goal: ${parseFloat(entry.goalTarget).toFixed(2)}
+                              Goal: ${(parseFloat(entry.goalTarget) || 0).toFixed(2)}
                             </span>
                           )}
                         </div>
@@ -1315,11 +1427,11 @@ export default function Home() {
                         <div>
   <p className="text-gray-600">Income (This Week)</p>
   <p className="font-medium">
-    ${parseFloat(entry.paycheck).toFixed(2)}
+    ${(parseFloat(entry.paycheck) || 0).toFixed(2)}
   </p>
 
   <p className="text-xs text-gray-500 mt-1">
-    Starting Balance: ${parseFloat(entry.totalMoney).toFixed(2)}
+    Starting Balance: ${(parseFloat(entry.totalMoney) || 0).toFixed(2)}
   </p>
 </div>
                           <div>
@@ -1329,7 +1441,7 @@ export default function Home() {
                                 {needsStatus.icon} {needsStatus.text}
                               </span>
                             </div>
-                            <p className="font-medium">${entry.needs.total.toFixed(2)}</p>
+                            <p className="font-medium">${(entry.needs?.total || 0).toFixed(2)}</p>
                             <p className="text-xs text-gray-500">Target: 50% | Actual: {formatPercentage(needsPercentage)}</p>
                           </div>
                           <div>
@@ -1339,7 +1451,7 @@ export default function Home() {
                                 {wantsStatus.icon} {wantsStatus.text}
                               </span>
                             </div>
-                            <p className="font-medium">${entry.wants.total.toFixed(2)}</p>
+                            <p className="font-medium">${(entry.wants?.total || 0).toFixed(2)}</p>
                             <p className="text-xs text-gray-500">Target: 30% | Actual: {formatPercentage(wantsPercentage)}</p>
                           </div>
                           <div>
@@ -1349,7 +1461,7 @@ export default function Home() {
                                 {savingsStatus.icon} {savingsStatus.text}
                               </span>
                             </div>
-                            <p className="font-medium">${entry.savings.total.toFixed(2)}</p>
+                            <p className="font-medium">${(entry.savings?.total || 0).toFixed(2)}</p>
                             <p className="text-xs text-gray-500">Target: 20% | Actual: {formatPercentage(savingsPercentage)}</p>
                           </div>
                         </div>
@@ -1365,7 +1477,7 @@ export default function Home() {
                             </div>
                             <div className="bg-white p-3 rounded-lg shadow-sm">
                               <p className="text-sm text-gray-600">Total Saved</p>
-                              <p className="text-xl font-bold text-green-600">${entry.savings.total.toFixed(2)}</p>
+                              <p className="text-xl font-bold text-green-600">${(entry.savings?.total || 0).toFixed(2)}</p>
                               <p className="text-xs text-gray-500">Savings + Investments</p>
                             </div>
                             <div className="bg-white p-3 rounded-lg shadow-sm">
