@@ -175,6 +175,69 @@ export default function Home() {
     }
   }, []);
 
+  // Fetch budget history from API on component mount
+  useEffect(() => {
+    const fetchBudgetHistory = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/budgets');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch budget history: ${response.status} ${response.statusText}`);
+        }
+        
+        const apiData = await response.json();
+        
+        // Transform API response to BudgetEntry format
+        const transformedHistory: BudgetEntry[] = apiData.map((entry: any) => ({
+          date: entry.budget_date || entry.date || '',
+          totalMoney: '0', // API doesn't store totalMoney, default to 0
+          paycheck: entry.income?.toString() || '0',
+          needs: {
+            total: (entry.needs_data?.food || 0) + (entry.needs_data?.rent || 0) + (entry.needs_data?.utilities || 0),
+            breakdown: {
+              food: entry.needs_data?.food || 0,
+              rent: entry.needs_data?.rent || 0,
+              utilities: entry.needs_data?.utilities || 0
+            }
+          },
+          wants: {
+            total: (entry.wants_data?.uber || 0) + (entry.wants_data?.clothes || 0) + (entry.wants_data?.entertainment || 0),
+            breakdown: {
+              uber: entry.wants_data?.uber || 0,
+              clothes: entry.wants_data?.clothes || 0,
+              entertainment: entry.wants_data?.entertainment || 0
+            }
+          },
+          savings: {
+            total: (entry.savings_data?.invest || 0) + (entry.savings_data?.emergency || 0),
+            breakdown: {
+              invest: entry.savings_data?.invest || 0,
+              emergency: entry.savings_data?.emergency || 0
+            }
+          },
+          goalTarget: '',
+          notes: entry.notes || undefined,
+          tags: [],
+          recurringExpenses: [],
+          verse: undefined
+        }));
+        
+        // Update history state with fetched data
+        setHistory(transformedHistory);
+        
+        // Also save to localStorage for offline access
+        localStorage.setItem('budgetHistory', JSON.stringify(transformedHistory));
+        
+      } catch (error) {
+        console.error('Error fetching budget history from API:', error);
+        // Keep history as empty array on error (or keep existing localStorage data)
+        // Don't overwrite existing history if API fetch fails
+      }
+    };
+    
+    fetchBudgetHistory();
+  }, []); // Empty dependency array - runs only once on mount
+
   const saveToHistory = (entry: BudgetEntry) => {
     const newHistory = [entry, ...history];
     setHistory(newHistory);
@@ -241,22 +304,89 @@ export default function Home() {
   };
 
   const handleSubmit = (e: React.FormEvent) => {
+    console.log('Button Clicked, Function Running');
     e.preventDefault();
+    
+    // ============================================
+    // STEP 0: IMMEDIATE API REQUEST (FIRST PRIORITY)
+    // ============================================
+    // Send API request FIRST, before any other logic
+    // Calculate minimal data needed for API call
+    const amountMadeThisWeek = parseFloat(form.paycheck) || 0;
+    
+    // Calculate breakdowns for API payload
+    const needsBreakdown = {
+      food: parseFloat(form.food) || 0,
+      rent: parseFloat(form.rent) || 0,
+      utilities: parseFloat(form.utilities) || 0
+    };
+    
+    const wantsBreakdown = {
+      uber: parseFloat(form.uber) || 0,
+      clothes: parseFloat(form.clothes) || 0,
+      entertainment: parseFloat(form.entertainment) || 0
+    };
+    
+    const savingsBreakdown = {
+      invest: parseFloat(form.invest) || 0,
+      emergency: parseFloat(form.emergency) || 0
+    };
+    
+    // Create API payload
+    const budgetEntry = {
+      budget_date: form.date,
+      totalMoney: parseFloat(form.totalMoney) || 0, // Starting balance (calculated inline)
+      paycheck: amountMadeThisWeek,
+      needs: needsBreakdown,
+      wants: wantsBreakdown,
+      savings: savingsBreakdown,
+      notes: form.notes || null
+    };
+    
+    // Send API request immediately (fire-and-forget)
+    (async () => {
+      try {
+        console.log('SENDING API REQUEST:', budgetEntry);
+        const apiResponse = await fetch("http://localhost:5000/api/budgets", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(budgetEntry)
+        });
+        
+        if (apiResponse.status === 201) {
+          const apiData = await apiResponse.json();
+          console.log("Budget entry saved successfully with ID:", apiData.id);
+          
+          // Reset notes and tags after successful submission
+          setForm(prev => ({
+            ...prev,
+            notes: "",
+            tags: []
+          }));
+        } else {
+          const errorData = await apiResponse.json();
+          console.error("Failed to save budget entry:", errorData);
+        }
+      } catch (error) {
+        console.error("Error saving budget entry to API:", error);
+      }
+    })();
     
     // ============================================
     // STEP 1: IMMEDIATE CALCULATIONS (SYNCHRONOUS)
     // ============================================
-    // All calculations happen immediately, before any async operations
+    // All calculations happen immediately, after API request is sent
     
     // Safety checks: Convert all inputs to numbers with fallback to 0
     const startingBalance = parseFloat(form.totalMoney) || 0;
-    const amountMadeThisWeek = parseFloat(form.paycheck) || 0;
     const totalIncome = startingBalance + amountMadeThisWeek;
     
     // Calculate totals for each category with safety checks
-    const needsTotal = (parseFloat(form.food) || 0) + (parseFloat(form.rent) || 0) + (parseFloat(form.utilities) || 0);
-    const wantsTotal = (parseFloat(form.uber) || 0) + (parseFloat(form.clothes) || 0) + (parseFloat(form.entertainment) || 0);
-    const savingsTotal = (parseFloat(form.invest) || 0) + (parseFloat(form.emergency) || 0);
+    const needsTotal = needsBreakdown.food + needsBreakdown.rent + needsBreakdown.utilities;
+    const wantsTotal = wantsBreakdown.uber + wantsBreakdown.clothes + wantsBreakdown.entertainment;
+    const savingsTotal = savingsBreakdown.invest + savingsBreakdown.emergency;
 
     // Calculate suggested budget based on 50/30/20 rule
     const suggested = {
@@ -285,30 +415,19 @@ export default function Home() {
       }
     };
 
-    // Calculate actual values from form inputs
+    // Calculate actual values from form inputs (using already-calculated breakdowns)
     const actual = {
       needs: {
         total: needsTotal,
-        breakdown: {
-          food: parseFloat(form.food) || 0,
-          rent: parseFloat(form.rent) || 0,
-          utilities: parseFloat(form.utilities) || 0
-        }
+        breakdown: needsBreakdown
       },
       wants: {
         total: wantsTotal,
-        breakdown: {
-          uber: parseFloat(form.uber) || 0,
-          clothes: parseFloat(form.clothes) || 0,
-          entertainment: parseFloat(form.entertainment) || 0
-        }
+        breakdown: wantsBreakdown
       },
       savings: {
         total: savingsTotal,
-        breakdown: {
-          invest: parseFloat(form.invest) || 0,
-          emergency: parseFloat(form.emergency) || 0
-        }
+        breakdown: savingsBreakdown
       }
     };
 
@@ -361,66 +480,7 @@ export default function Home() {
     setIsReportVisible(true);
     
     // ============================================
-    // STEP 3: SAVE TO DATABASE (ASYNCHRONOUS - NON-BLOCKING)
-    // ============================================
-    // This happens after UI is updated and does not affect UI display
-    // Wrapped in async function to run in background without blocking
-    const budgetEntry = {
-      budget_date: form.date,
-      income: amountMadeThisWeek, // Weekly income (already safely converted)
-      needs_data: {
-        food: parseFloat(form.food) || 0,
-        rent: parseFloat(form.rent) || 0,
-        utilities: parseFloat(form.utilities) || 0
-      },
-      wants_data: {
-        uber: parseFloat(form.uber) || 0,
-        clothes: parseFloat(form.clothes) || 0,
-        entertainment: parseFloat(form.entertainment) || 0
-      },
-      savings_data: {
-        invest: parseFloat(form.invest) || 0,
-        emergency: parseFloat(form.emergency) || 0
-      },
-      notes: form.notes || null
-    };
-
-    // Save to backend API (fire-and-forget, non-blocking)
-    // This runs asynchronously without blocking the UI update
-    // Currently commented out - uncomment when API is ready
-    /*
-    (async () => {
-      try {
-        const apiResponse = await fetch("http://localhost:5000/api/budgets", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(budgetEntry)
-        });
-        
-        if (apiResponse.status === 201) {
-          const apiData = await apiResponse.json();
-          console.log("Budget entry saved successfully with ID:", apiData.id);
-          
-          // Reset notes and tags after successful submission
-          setForm(prev => ({
-            ...prev,
-            notes: "",
-            tags: []
-          }));
-        } else {
-          const errorData = await apiResponse.json();
-          console.error("Failed to save budget entry:", errorData);
-        }
-      } catch (error) {
-        console.error("Error saving budget entry to API:", error);
-      }
-    })();
-    */
-    
-    // ============================================
-    // STEP 4: FUNCTION COMPLETION - STATE IS ALREADY SET
+    // STEP 3: FUNCTION COMPLETION - STATE IS ALREADY SET
     // ============================================
     // The result state was set in STEP 2 (line 328: setResult(result))
     // This ensures the report is visible immediately after calculation
