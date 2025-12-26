@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import { Pie } from 'react-chartjs-2';
+import { Pie, Doughnut } from 'react-chartjs-2';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, addDays } from 'date-fns';
 
@@ -14,6 +14,7 @@ interface RecurringExpense {
 }
 
 interface BudgetEntry {
+  id?: number; // Database ID for API operations
   date: string;
   totalMoney: string;
   paycheck: string;
@@ -175,22 +176,33 @@ export default function Home() {
     }
   }, []);
 
-  // Fetch budget history from API on component mount
-  useEffect(() => {
-    const fetchBudgetHistory = async () => {
-      try {
-        const response = await fetch('http://localhost:5000/api/budgets');
+  // Fetch budget history from API - reusable function
+  const fetchBudgetHistory = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/budgets');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch budget history: ${response.status} ${response.statusText}`);
+      }
+      
+      const apiData = await response.json();
+      
+      // Transform API response to BudgetEntry format
+      const transformedHistory: BudgetEntry[] = apiData.map((entry: any) => {
+        // Ensure id is properly extracted and is a number
+        const entryId = entry.id !== undefined && entry.id !== null ? Number(entry.id) : undefined;
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch budget history: ${response.status} ${response.statusText}`);
-        }
+        // Debug: Log each entry's id during transformation
+        console.log('Transforming API entry:', { 
+          rawId: entry.id, 
+          entryId, 
+          budgetDate: entry.budget_date 
+        });
         
-        const apiData = await response.json();
-        
-        // Transform API response to BudgetEntry format
-        const transformedHistory: BudgetEntry[] = apiData.map((entry: any) => ({
+        return {
+          id: entryId, // Preserve database ID for delete operations - EXPLICITLY SET
           date: entry.budget_date || entry.date || '',
-          totalMoney: '0', // API doesn't store totalMoney, default to 0
+          totalMoney: entry.total_money?.toString() || '0',
           paycheck: entry.income?.toString() || '0',
           needs: {
             total: (entry.needs_data?.food || 0) + (entry.needs_data?.rent || 0) + (entry.needs_data?.utilities || 0),
@@ -220,21 +232,28 @@ export default function Home() {
           tags: [],
           recurringExpenses: [],
           verse: undefined
-        }));
-        
-        // Update history state with fetched data
-        setHistory(transformedHistory);
-        
-        // Also save to localStorage for offline access
-        localStorage.setItem('budgetHistory', JSON.stringify(transformedHistory));
-        
-      } catch (error) {
-        console.error('Error fetching budget history from API:', error);
-        // Keep history as empty array on error (or keep existing localStorage data)
-        // Don't overwrite existing history if API fetch fails
-      }
-    };
-    
+        };
+      });
+      
+      // CRITICAL: Log the transformed data to verify IDs are present
+      console.log('TRANSFORMED DATA:', transformedHistory);
+      console.log('TRANSFORMED DATA IDs:', transformedHistory.map(entry => ({ id: entry.id, date: entry.date })));
+      
+      // Update history state with fetched data
+      setHistory(transformedHistory);
+      
+      // Also save to localStorage for offline access
+      localStorage.setItem('budgetHistory', JSON.stringify(transformedHistory));
+      
+    } catch (error) {
+      console.error('Error fetching budget history from API:', error);
+      // Keep history as empty array on error (or keep existing localStorage data)
+      // Don't overwrite existing history if API fetch fails
+    }
+  };
+
+  // Fetch budget history from API on component mount
+  useEffect(() => {
     fetchBudgetHistory();
   }, []); // Empty dependency array - runs only once on mount
 
@@ -247,6 +266,44 @@ export default function Home() {
   const clearHistory = () => {
     setHistory([]);
     localStorage.removeItem('budgetHistory');
+  };
+
+  // Handle delete budget entry
+  const handleDelete = async (id: number) => {
+    // Validate ID
+    if (!id || typeof id !== 'number' || isNaN(id)) {
+      console.error('Invalid ID provided to handleDelete:', id);
+      alert('Invalid entry ID. Cannot delete.');
+      return;
+    }
+
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete this budget entry?`)) {
+      return;
+    }
+
+    try {
+      console.log(`Deleting budget entry with ID: ${id}`);
+      const response = await fetch(`http://localhost:5000/api/budgets/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to delete budget entry: ${response.status} ${response.statusText}. ${errorText}`);
+      }
+
+      // Re-fetch history from API to update the list instantly
+      await fetchBudgetHistory();
+      
+      console.log(`Budget entry with id ${id} deleted successfully`);
+    } catch (error) {
+      console.error('Error deleting budget entry:', error);
+      alert(`Failed to delete budget entry: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -343,7 +400,7 @@ export default function Home() {
       notes: form.notes || null
     };
     
-    // Send API request immediately (fire-and-forget)
+    // Send API request and wait for response to get the ID
     (async () => {
       try {
         console.log('SENDING API REQUEST:', budgetEntry);
@@ -357,7 +414,12 @@ export default function Home() {
         
         if (apiResponse.status === 201) {
           const apiData = await apiResponse.json();
-          console.log("Budget entry saved successfully with ID:", apiData.id);
+          const newEntryId = apiData.id;
+          console.log("Budget entry saved successfully with ID:", newEntryId);
+          
+          // CRITICAL: Refresh history from API to get the new entry with its ID
+          // This ensures the history state has the correct ID from the database
+          await fetchBudgetHistory();
           
           // Reset notes and tags after successful submission
           setForm(prev => ({
@@ -454,25 +516,10 @@ export default function Home() {
     // ============================================
     // STEP 2.5: ADD CURRENT CALCULATION TO HISTORY
     // ============================================
-    // Create a BudgetEntry from the calculated result to display in Past Budgets
-    const newBudgetEntry: BudgetEntry = {
-      date: form.date,
-      totalMoney: form.totalMoney || "0",
-      paycheck: form.paycheck || "0",
-      needs: actual.needs,
-      wants: actual.wants,
-      savings: actual.savings,
-      goalTarget: form.goalTarget || "",
-      notes: form.notes || undefined,
-      tags: form.tags || [],
-      recurringExpenses: recurringExpenses,
-      verse: getRandomVerse()
-    };
-    
-    // Add the new entry to the beginning of history
-    const newHistory = [newBudgetEntry, ...history];
-    setHistory(newHistory);
-    localStorage.setItem('budgetHistory', JSON.stringify(newHistory));
+    // NOTE: We no longer add to history here because the API POST will trigger
+    // a refresh of history via fetchBudgetHistory(), which will include the ID.
+    // This ensures the history state always has the correct database IDs.
+    // The entry will appear in history after the API call completes.
     
     // ============================================
     // STEP 2.6: MAKE REPORT VISIBLE
@@ -579,6 +626,58 @@ export default function Home() {
               const value = context.raw;
               const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
               const percentage = ((value / total) * 100).toFixed(1);
+              return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+            }
+          }
+        }
+      }
+    };
+
+    return { data, options };
+  };
+
+  // Get Doughnut Chart Data for 50/30/20 Budget Breakdown
+  const getDoughnutChartData = (needsTotal: number, wantsTotal: number, savingsTotal: number) => {
+    const total = needsTotal + wantsTotal + savingsTotal;
+    
+    // Only return chart data if totals are greater than 0
+    if (total <= 0) return null;
+
+    const data = {
+      labels: ['Needs (50%)', 'Wants (30%)', 'Savings (20%)'],
+      datasets: [
+        {
+          data: [needsTotal, wantsTotal, savingsTotal],
+          backgroundColor: [
+            '#F59E0B', // Needs - Yellow/Orange
+            '#3B82F6', // Wants - Blue
+            '#10B981'  // Savings - Green
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        },
+      ],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'bottom' as const,
+          labels: {
+            font: {
+              size: 12
+            },
+            padding: 15
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context: any) {
+              const value = context.raw;
+              const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+              const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
               return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
             }
           }
@@ -1449,11 +1548,28 @@ export default function Home() {
                 )}
               </div>
 
-              {!Array.isArray(history) || history.length === 0 ? (
+              {!Array.isArray(history) || !history || history.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">No past budgets recorded yet.</p>
               ) : (
                 <div className="space-y-6">
-                  {history.map((entry, index) => {
+                  {history && history.length > 0 && history.map((entry, index) => {
+                    // Enhanced logging to verify id is present
+                    const entryId = entry?.id;
+                    console.log('Rendering History Item', { 
+                      index, 
+                      entryId, 
+                      entryIdType: typeof entryId,
+                      entryIdIsNumber: typeof entryId === 'number',
+                      hasEntry: !!entry,
+                      entryDate: entry?.date
+                    });
+                    
+                    // Safety check: ensure entry exists
+                    if (!entry) {
+                      console.warn('Invalid entry at index:', index);
+                      return null;
+                    }
+                    
                     const totalAvailable = (parseFloat(entry.totalMoney) || 0) + (parseFloat(entry.paycheck) || 0);
                     const safeTotalAvailable = totalAvailable > 0 ? totalAvailable : 1; // Prevent division by zero
                     const needsPercentage = ((entry.needs?.total || 0) / safeTotalAvailable) * 100;
@@ -1467,21 +1583,44 @@ export default function Home() {
                     const totalSpent = (entry.needs?.total || 0) + (entry.wants?.total || 0);
                     const biggestCategory = getBiggestCategory(entry.needs?.total || 0, entry.wants?.total || 0);
 
+                    // Use entry.id for key, fallback to index if id is missing
+                    const keyValue = (entryId !== undefined && entryId !== null) ? entryId : `entry-${index}`;
+                    
                     return (
-                      <div key={index} className="bg-slate-50 rounded-lg p-6 transform transition-all hover:scale-[1.01]">
+                      <div key={keyValue} className="bg-slate-50 rounded-lg p-6 transform transition-all hover:scale-[1.01]">
                         <div className="flex justify-between items-start mb-2">
                           <h3 className="font-medium">
-                            Week of {new Date(entry.date).toLocaleDateString('en-US', {
+                            Week of {entry.date ? new Date(entry.date).toLocaleDateString('en-US', {
                               month: 'long',
                               day: 'numeric',
                               year: 'numeric'
-                            })}
+                            }) : 'Unknown Date'}
                           </h3>
-                          {entry.goalTarget && (
-                            <span className="text-sm text-purple-600">
-                              Goal: ${(parseFloat(entry.goalTarget) || 0).toFixed(2)}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {entry.goalTarget && (
+                              <span className="text-sm text-purple-600">
+                                Goal: ${(parseFloat(entry.goalTarget) || 0).toFixed(2)}
+                              </span>
+                            )}
+                            {entryId !== undefined && entryId !== null && typeof entryId === 'number' && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Delete button clicked for entry:', { entryId, entryDate: entry.date });
+                                  if (entryId !== undefined && entryId !== null && typeof entryId === 'number') {
+                                    handleDelete(entryId);
+                                  } else {
+                                    console.error('Cannot delete: entryId is invalid', { entryId, type: typeof entryId });
+                                  }
+                                }}
+                                className="px-3 py-1 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                                title={`Delete this budget entry (ID: ${entryId})`}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
@@ -1551,9 +1690,79 @@ export default function Home() {
                               </p>
                             </div>
                           </div>
-                          <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
-                            <p className="text-sm text-gray-700 italic">"{entry.verse || ''}"</p>
-                          </div>
+                          
+                          {/* 50/30/20 Doughnut Chart */}
+                          {(() => {
+                            // Use live state values directly - recalculate on every render
+                            const needsTotal = entry.needs?.total || 0;
+                            const wantsTotal = entry.wants?.total || 0;
+                            const savingsTotal = entry.savings?.total || 0;
+                            const total = needsTotal + wantsTotal + savingsTotal;
+                            
+                            // Only render if totals are greater than 0
+                            if (total <= 0) {
+                              return null;
+                            }
+                            
+                            // Create chart data inline to ensure reactivity
+                            const chartData = {
+                              labels: ['Needs (50%)', 'Wants (30%)', 'Savings (20%)'],
+                              datasets: [
+                                {
+                                  data: [needsTotal, wantsTotal, savingsTotal], // Use live values directly
+                                  backgroundColor: [
+                                    '#F59E0B', // Needs - Yellow/Orange
+                                    '#3B82F6', // Wants - Blue
+                                    '#10B981'  // Savings - Green
+                                  ],
+                                  borderColor: '#ffffff',
+                                  borderWidth: 2,
+                                },
+                              ],
+                            };
+
+                            const chartOptions = {
+                              responsive: true,
+                              maintainAspectRatio: true,
+                              plugins: {
+                                legend: {
+                                  position: 'bottom' as const,
+                                  labels: {
+                                    font: {
+                                      size: 12
+                                    },
+                                    padding: 15
+                                  }
+                                },
+                                tooltip: {
+                                  callbacks: {
+                                    label: function(context: any) {
+                                      const value = context.raw;
+                                      const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                      return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
+                                    }
+                                  }
+                                }
+                              }
+                            };
+                            
+                            return (
+                              <div className="mb-4 bg-white p-4 rounded-lg shadow-sm">
+                                <h5 className="text-md font-semibold text-gray-800 mb-3 text-center">Budget Breakdown (50/30/20 Rule)</h5>
+                                <div className="flex justify-center items-center">
+                                  <div className="w-full max-w-xs">
+                                    <Doughnut data={chartData} options={chartOptions} key={`chart-${entry.id || entry.date}-${needsTotal}-${wantsTotal}-${savingsTotal}`} />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          
+                          {entry.verse && (
+                            <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg">
+                              <p className="text-sm text-gray-700 italic">"{entry.verse}"</p>
+                            </div>
+                          )}
                         </div>
 
                         {/* Add Notes and Tags display */}

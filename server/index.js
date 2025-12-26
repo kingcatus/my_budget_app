@@ -50,10 +50,7 @@ app.get('/api/status', (req, res) => {
 app.post('/api/budgets', async (req, res) => {
   try {
     // Destructure using frontend's object names
-    const { paycheck, needs, wants, savings, budget_date, notes, totalMoney } = req.body;
-    
-    // Set default value for totalMoney if missing
-    const totalMoneyValue = totalMoney !== undefined ? totalMoney : 0;
+    const { paycheck, needs, wants, savings, budget_date, notes } = req.body;
     
     // Debug: Log received request body
     console.log('RECEIVED BODY:', req.body);
@@ -67,20 +64,18 @@ app.post('/api/budgets', async (req, res) => {
 
     // Insert into budget_entries table using parameterized query
     // Map frontend keys to database column names:
-    // totalMoney -> total_money (or totalMoney if column name matches)
     // paycheck -> income
     // needs -> needs_data
     // wants -> wants_data
     // savings -> savings_data
     const query = `
-      INSERT INTO budget_entries (budget_date, total_money, income, needs_data, wants_data, savings_data, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO budget_entries (budget_date, income, needs_data, wants_data, savings_data, notes)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id
     `;
 
     const values = [
       budget_date,
-      totalMoneyValue, // Starting balance (totalMoney)
       paycheck,        // Map frontend 'paycheck' to database 'income' column
       needs,           // Map frontend 'needs' to database 'needs_data' JSONB column
       wants,           // Map frontend 'wants' to database 'wants_data' JSONB column
@@ -124,6 +119,59 @@ app.get('/api/budgets', async (req, res) => {
     
     // Return the array of budget entries as JSON
     res.status(200).json(result.rows);
+    
+  } catch (error) {
+    console.error('Database error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+// DELETE /api/budgets/:id - Delete a specific budget entry
+app.delete('/api/budgets/:id', async (req, res) => {
+  try {
+    // Extract the id from URL parameters
+    const { id } = req.params;
+    
+    // Validate that id is provided
+    if (!id) {
+      return res.status(400).json({
+        error: 'Missing required parameter: id'
+      });
+    }
+    
+    // Convert id to integer for database query
+    const entryId = parseInt(id, 10);
+    
+    // Validate that id is a valid number
+    if (isNaN(entryId)) {
+      return res.status(400).json({
+        error: 'Invalid id parameter',
+        message: 'ID must be a valid number'
+      });
+    }
+    
+    // Log the ID being deleted for debugging
+    console.log('Deleted ID:', entryId);
+    
+    // Execute DELETE query - CRITICAL: Must use WHERE clause with parameterized query
+    const query = 'DELETE FROM budget_entries WHERE id = $1';
+    const values = [entryId];
+    
+    const result = await pool.query(query, values);
+    
+    // Check if any row was deleted
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        error: 'Budget entry not found',
+        message: `No budget entry with id ${id} exists`
+      });
+    }
+    
+    // Return 204 No Content on successful deletion
+    res.status(204).send();
     
   } catch (error) {
     console.error('Database error:', error);

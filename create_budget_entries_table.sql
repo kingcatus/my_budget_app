@@ -17,3 +17,4 @@ CREATE INDEX idx_budget_entries_date ON budget_entries(budget_date);
 CREATE INDEX idx_budget_entries_created_at ON budget_entries(created_at);
 
 
+
