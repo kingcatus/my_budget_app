@@ -51,6 +51,8 @@ export default function Home() {
     date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
     totalMoney: "",
     paycheck: "",
+    baseline: "", // Fixed weekly needs (baseline)
+    bufferGoalWeeks: "4", // Target number of weeks for buffer (default 4)
     goalTarget: "", // Add goal target field
     notes: "",
     tags: [] as string[],
@@ -58,16 +60,28 @@ export default function Home() {
     food: "",
     rent: "",
     utilities: "",
+    transportation: "", // Moved from Wants
+    health: "", // New: Health/Medication
+    insurance: "", // New: Insurance
     // Wants categories
-    uber: "",
     clothes: "",
     entertainment: "",
+    academic: "", // New: Academic/Career
+    digitalSubs: "", // New: Digital Subs
+    hobby: "", // New: Hobby/Gear
     // Savings categories
     invest: "",
     emergency: "",
+    longTermInvest: "", // New: Long-term Investment
+    bigPurchase: "", // New: Big Purchase Goal
   });
 
   const [result, setResult] = useState<null | {
+    mode: 'survival' | 'stable' | 'growth';
+    baseline: number;
+    excess: number;
+    bufferGoal: number;
+    isBufferFilling: boolean;
     suggested: {
       needs: { total: number; breakdown: { [key: string]: number } };
       wants: { total: number; breakdown: { [key: string]: number } };
@@ -205,26 +219,40 @@ export default function Home() {
           totalMoney: entry.total_money?.toString() || '0',
           paycheck: entry.income?.toString() || '0',
           needs: {
-            total: (entry.needs_data?.food || 0) + (entry.needs_data?.rent || 0) + (entry.needs_data?.utilities || 0),
+            total: (entry.needs_data?.food || 0) + (entry.needs_data?.rent || 0) + (entry.needs_data?.utilities || 0) +
+                   (entry.needs_data?.transportation || 0) + (entry.needs_data?.health || 0) + (entry.needs_data?.insurance || 0),
             breakdown: {
               food: entry.needs_data?.food || 0,
               rent: entry.needs_data?.rent || 0,
-              utilities: entry.needs_data?.utilities || 0
+              utilities: entry.needs_data?.utilities || 0,
+              transportation: entry.needs_data?.transportation || 0,
+              health: entry.needs_data?.health || 0,
+              insurance: entry.needs_data?.insurance || 0
             }
           },
           wants: {
-            total: (entry.wants_data?.uber || 0) + (entry.wants_data?.clothes || 0) + (entry.wants_data?.entertainment || 0),
+            // Backward compatible: check for old 'uber' field and map to transportation in needs if present
+            total: (entry.wants_data?.clothes || 0) + (entry.wants_data?.entertainment || 0) +
+                   (entry.wants_data?.academic || 0) + (entry.wants_data?.digitalSubs || 0) + (entry.wants_data?.hobby || 0) +
+                   // Legacy support: include old 'uber' field if it exists
+                   (entry.wants_data?.uber || 0),
             breakdown: {
-              uber: entry.wants_data?.uber || 0,
               clothes: entry.wants_data?.clothes || 0,
-              entertainment: entry.wants_data?.entertainment || 0
+              entertainment: entry.wants_data?.entertainment || 0,
+              academic: entry.wants_data?.academic || 0,
+              digitalSubs: entry.wants_data?.digitalSubs || 0,
+              hobby: entry.wants_data?.hobby || 0
+              // Note: Old 'uber' data will be included in total but not in breakdown (moved to needs)
             }
           },
           savings: {
-            total: (entry.savings_data?.invest || 0) + (entry.savings_data?.emergency || 0),
+            total: (entry.savings_data?.invest || 0) + (entry.savings_data?.emergency || 0) +
+                   (entry.savings_data?.longTermInvest || 0) + (entry.savings_data?.bigPurchase || 0),
             breakdown: {
               invest: entry.savings_data?.invest || 0,
-              emergency: entry.savings_data?.emergency || 0
+              emergency: entry.savings_data?.emergency || 0,
+              longTermInvest: entry.savings_data?.longTermInvest || 0,
+              bigPurchase: entry.savings_data?.bigPurchase || 0
             }
           },
           goalTarget: '',
@@ -375,18 +403,25 @@ export default function Home() {
     const needsBreakdown = {
       food: parseFloat(form.food) || 0,
       rent: parseFloat(form.rent) || 0,
-      utilities: parseFloat(form.utilities) || 0
+      utilities: parseFloat(form.utilities) || 0,
+      transportation: parseFloat(form.transportation) || 0,
+      health: parseFloat(form.health) || 0,
+      insurance: parseFloat(form.insurance) || 0
     };
     
     const wantsBreakdown = {
-      uber: parseFloat(form.uber) || 0,
       clothes: parseFloat(form.clothes) || 0,
-      entertainment: parseFloat(form.entertainment) || 0
+      entertainment: parseFloat(form.entertainment) || 0,
+      academic: parseFloat(form.academic) || 0,
+      digitalSubs: parseFloat(form.digitalSubs) || 0,
+      hobby: parseFloat(form.hobby) || 0
     };
     
     const savingsBreakdown = {
       invest: parseFloat(form.invest) || 0,
-      emergency: parseFloat(form.emergency) || 0
+      emergency: parseFloat(form.emergency) || 0,
+      longTermInvest: parseFloat(form.longTermInvest) || 0,
+      bigPurchase: parseFloat(form.bigPurchase) || 0
     };
     
     // Create API payload
@@ -437,45 +472,117 @@ export default function Home() {
     })();
     
     // ============================================
-    // STEP 1: IMMEDIATE CALCULATIONS (SYNCHRONOUS)
+    // STEP 1: TIERED MODE BUDGETING CALCULATIONS
     // ============================================
     // All calculations happen immediately, after API request is sent
     
     // Safety checks: Convert all inputs to numbers with fallback to 0
-    const startingBalance = parseFloat(form.totalMoney) || 0;
-    const totalIncome = startingBalance + amountMadeThisWeek;
+    const startingBalance = parseFloat(form.totalMoney) || 0; // Buffer (protected, not part of spending pool)
+    // amountMadeThisWeek already declared above in STEP 0
+    const baseline = parseFloat(form.baseline) || 0; // Fixed weekly needs
+    const bufferGoalWeeks = parseFloat(form.bufferGoalWeeks) || 4;
+    
+    // Mode Determination: Compare income vs baseline
+    let mode: 'survival' | 'stable' | 'growth';
+    if (amountMadeThisWeek < (baseline * 0.9)) {
+      mode = 'survival';
+    } else if (amountMadeThisWeek >= (baseline * 0.9) && amountMadeThisWeek <= (baseline * 1.1)) {
+      mode = 'stable';
+    } else {
+      mode = 'growth';
+    }
+    
+    // Calculate excess (income - baseline) - only positive in Growth mode
+    const excess = Math.max(0, amountMadeThisWeek - baseline);
+    
+    // Buffer goal calculation
+    const bufferGoal = baseline * bufferGoalWeeks;
+    const isBufferFilling = startingBalance < bufferGoal;
     
     // Calculate totals for each category with safety checks
-    const needsTotal = needsBreakdown.food + needsBreakdown.rent + needsBreakdown.utilities;
-    const wantsTotal = wantsBreakdown.uber + wantsBreakdown.clothes + wantsBreakdown.entertainment;
-    const savingsTotal = savingsBreakdown.invest + savingsBreakdown.emergency;
+    const needsTotal = needsBreakdown.food + needsBreakdown.rent + needsBreakdown.utilities + 
+                       needsBreakdown.transportation + needsBreakdown.health + needsBreakdown.insurance;
+    const wantsTotal = wantsBreakdown.clothes + wantsBreakdown.entertainment + wantsBreakdown.academic + 
+                       wantsBreakdown.digitalSubs + wantsBreakdown.hobby;
+    const savingsTotal = savingsBreakdown.invest + savingsBreakdown.emergency + 
+                         savingsBreakdown.longTermInvest + savingsBreakdown.bigPurchase;
 
-    // Calculate suggested budget based on 50/30/20 rule
-    const suggested = {
-      needs: {
-        total: totalIncome * 0.5,
-        breakdown: {
-          food: totalIncome * 0.15,      // 15% of income
-          rent: totalIncome * 0.25,      // 25% of income
-          utilities: totalIncome * 0.10   // 10% of income
+    // Calculate suggested budget based on mode
+    let suggested;
+    
+    if (mode === 'survival' || mode === 'stable') {
+      // In Survival/Stable: All income goes to needs, wants = 0
+      suggested = {
+        needs: {
+          total: amountMadeThisWeek, // All income to needs
+          breakdown: {
+            food: amountMadeThisWeek * 0.25,
+            rent: amountMadeThisWeek * 0.40,
+            utilities: amountMadeThisWeek * 0.15,
+            transportation: amountMadeThisWeek * 0.10,
+            health: amountMadeThisWeek * 0.05,
+            insurance: amountMadeThisWeek * 0.05
+          }
+        },
+        wants: {
+          total: 0, // Locked in Survival/Stable
+          breakdown: {
+            clothes: 0,
+            entertainment: 0,
+            academic: 0,
+            digitalSubs: 0,
+            hobby: 0
+          }
+        },
+        savings: {
+          total: 0, // No savings in Survival/Stable (focus on baseline)
+          breakdown: {
+            invest: 0,
+            emergency: 0,
+            longTermInvest: 0,
+            bigPurchase: 0
+          }
         }
-      },
-      wants: {
-        total: totalIncome * 0.3,
-        breakdown: {
-          uber: totalIncome * 0.10,      // 10% of income
-          clothes: totalIncome * 0.10,    // 10% of income
-          entertainment: totalIncome * 0.10 // 10% of income
+      };
+    } else {
+      // Growth mode: Baseline + 50/30/20 on excess
+      const excessNeeds = excess * 0.5;
+      const excessWants = excess * 0.3;
+      const excessSavings = excess * 0.2;
+      
+      suggested = {
+        needs: {
+          total: baseline + excessNeeds, // Baseline + 50% of excess
+          breakdown: {
+            food: (baseline * 0.25) + (excessNeeds * 0.25),
+            rent: (baseline * 0.40) + (excessNeeds * 0.40),
+            utilities: (baseline * 0.15) + (excessNeeds * 0.15),
+            transportation: (baseline * 0.10) + (excessNeeds * 0.10),
+            health: (baseline * 0.05) + (excessNeeds * 0.05),
+            insurance: (baseline * 0.05) + (excessNeeds * 0.05)
+          }
+        },
+        wants: {
+          total: excessWants, // 30% of excess only
+          breakdown: {
+            clothes: excessWants * 0.20,
+            entertainment: excessWants * 0.20,
+            academic: excessWants * 0.20,
+            digitalSubs: excessWants * 0.20,
+            hobby: excessWants * 0.20
+          }
+        },
+        savings: {
+          total: excessSavings, // 20% of excess (may be labeled as Buffer Fill)
+          breakdown: {
+            invest: isBufferFilling ? 0 : excessSavings * 0.25,
+            emergency: isBufferFilling ? excessSavings * 0.50 : excessSavings * 0.25,
+            longTermInvest: isBufferFilling ? 0 : excessSavings * 0.25,
+            bigPurchase: isBufferFilling ? 0 : excessSavings * 0.25
+          }
         }
-      },
-      savings: {
-        total: totalIncome * 0.2,
-        breakdown: {
-          invest: totalIncome * 0.10,     // 10% of income
-          emergency: totalIncome * 0.10,  // 10% of income
-        }
-      }
-    };
+      };
+    }
 
     // Calculate actual values from form inputs (using already-calculated breakdowns)
     const actual = {
@@ -484,8 +591,14 @@ export default function Home() {
         breakdown: needsBreakdown
       },
       wants: {
-        total: wantsTotal,
-        breakdown: wantsBreakdown
+        total: mode === 'survival' || mode === 'stable' ? 0 : wantsTotal, // Force 0 in Survival/Stable
+        breakdown: mode === 'survival' || mode === 'stable' ? {
+          clothes: 0,
+          entertainment: 0,
+          academic: 0,
+          digitalSubs: 0,
+          hobby: 0
+        } : wantsBreakdown
       },
       savings: {
         total: savingsTotal,
@@ -506,10 +619,15 @@ export default function Home() {
     // Update UI state immediately with calculated results
     // This happens BEFORE any API calls, ensuring instant UI feedback
     const result = {
+      mode,
+      baseline,
+      excess,
+      bufferGoal,
+      isBufferFilling,
       suggested,
       actual,
       comparison,
-      projectedTotal: totalIncome
+      projectedTotal: amountMadeThisWeek // Only weekly income, not including buffer
     };
     setResult(result);
     
@@ -555,16 +673,23 @@ export default function Home() {
     needs: [
       { name: "food", label: "Food & Groceries" },
       { name: "rent", label: "Rent/Mortgage" },
-      { name: "utilities", label: "Utilities & Bills" }
+      { name: "utilities", label: "Utilities & Bills" },
+      { name: "transportation", label: "Transportation/Gas" },
+      { name: "health", label: "Health/Medication" },
+      { name: "insurance", label: "Insurance" }
     ],
     wants: [
-      { name: "uber", label: "Transportation (Uber/Taxi)" },
       { name: "clothes", label: "Clothing & Fashion" },
-      { name: "entertainment", label: "Entertainment & Fun" }
+      { name: "entertainment", label: "Entertainment & Fun" },
+      { name: "academic", label: "Academic/Career" },
+      { name: "digitalSubs", label: "Digital Subs (Netflix/Spotify)" },
+      { name: "hobby", label: "Hobby/Gear" }
     ],
     savings: [
       { name: "invest", label: "Robinhood Investment" },
-      { name: "emergency", label: "Emergency Fund" }
+      { name: "emergency", label: "Emergency Fund" },
+      { name: "longTermInvest", label: "Long-term Investment" },
+      { name: "bigPurchase", label: "Big Purchase Goal" }
     ]
   };
 
@@ -576,11 +701,18 @@ export default function Home() {
         'Food & Groceries',
         'Rent/Mortgage',
         'Utilities & Bills',
-        'Transportation',
+        'Transportation/Gas',
+        'Health/Medication',
+        'Insurance',
         'Clothing',
         'Entertainment',
+        'Academic/Career',
+        'Digital Subs',
+        'Hobby/Gear',
         'Robinhood Investment',
-        'Emergency Fund'
+        'Emergency Fund',
+        'Long-term Investment',
+        'Big Purchase Goal'
       ],
       datasets: [
         {
@@ -588,21 +720,35 @@ export default function Home() {
             result?.actual?.needs?.breakdown?.food || 0,
             result?.actual?.needs?.breakdown?.rent || 0,
             result?.actual?.needs?.breakdown?.utilities || 0,
-            result?.actual?.wants?.breakdown?.uber || 0,
+            result?.actual?.needs?.breakdown?.transportation || 0,
+            result?.actual?.needs?.breakdown?.health || 0,
+            result?.actual?.needs?.breakdown?.insurance || 0,
             result?.actual?.wants?.breakdown?.clothes || 0,
             result?.actual?.wants?.breakdown?.entertainment || 0,
+            result?.actual?.wants?.breakdown?.academic || 0,
+            result?.actual?.wants?.breakdown?.digitalSubs || 0,
+            result?.actual?.wants?.breakdown?.hobby || 0,
             result?.actual?.savings?.breakdown?.invest || 0,
-            result?.actual?.savings?.breakdown?.emergency || 0
+            result?.actual?.savings?.breakdown?.emergency || 0,
+            result?.actual?.savings?.breakdown?.longTermInvest || 0,
+            result?.actual?.savings?.breakdown?.bigPurchase || 0
           ],
           backgroundColor: [
             '#60A5FA', // Food - Light Blue
             '#3B82F6', // Rent - Blue
             '#2563EB', // Utilities - Dark Blue
-            '#34D399', // Transportation - Light Green
-            '#10B981', // Clothing - Green
-            '#059669', // Entertainment - Dark Green
-            '#A78BFA', // Investments - Light Purple
-            '#8B5CF6'  // Emergency - Purple
+            '#34D399', // Transportation/Gas - Light Green
+            '#10B981', // Health/Medication - Green
+            '#059669', // Insurance - Dark Green
+            '#F59E0B', // Clothing - Orange
+            '#EF4444', // Entertainment - Red
+            '#8B5CF6', // Academic/Career - Purple
+            '#EC4899', // Digital Subs - Pink
+            '#14B8A6', // Hobby/Gear - Teal
+            '#A78BFA', // Robinhood Investment - Light Purple
+            '#6366F1', // Emergency Fund - Indigo
+            '#F97316', // Long-term Investment - Orange
+            '#06B6D4'  // Big Purchase Goal - Cyan
           ],
           borderColor: '#ffffff',
           borderWidth: 2,
@@ -795,48 +941,73 @@ export default function Home() {
     localStorage.setItem('recurringExpenses', JSON.stringify(recurringExpenses));
   }, [recurringExpenses]);
 
-  const getAICoachMessage = (data: BudgetEntry) => {
-    const totalIncome = parseFloat(data.totalMoney) + parseFloat(data.paycheck);
-    const needsPercentage = (data.needs.total / totalIncome) * 100;
-    const wantsPercentage = (data.wants.total / totalIncome) * 100;
-    const savingsPercentage = (data.savings.total / totalIncome) * 100;
+  const getAICoachMessage = (data: BudgetEntry, mode?: 'survival' | 'stable' | 'growth', baseline?: number) => {
+    const totalIncome = parseFloat(data.paycheck) || 0;
+    const needsTotal = data.needs.total || 0;
+    
+    // Mode-specific coaching
+    if (mode === 'survival') {
+      return {
+        message: `Survival Mode: Your income is below baseline. Focus on protecting your essential needs ($${baseline?.toFixed(2) || '0'}). Avoid all discretionary spending and prioritize building your buffer when possible.`,
+        emoji: "🛡️",
+        tone: "text-red-800"
+      };
+    }
+    
+    if (mode === 'stable') {
+      return {
+        message: `Stable Mode: Your income matches your baseline. Maintain strict discipline - all funds go to needs only. Focus on building your buffer to ${(baseline || 0) * 4} weeks before allowing any wants spending.`,
+        emoji: "⚖️",
+        tone: "text-blue-800"
+      };
+    }
+    
+    if (mode === 'growth') {
+      const excess = totalIncome - (baseline || 0);
+      const needsPercentage = baseline ? ((needsTotal / baseline) * 100) : 0;
+      
+      if (needsTotal > (baseline || 0) * 1.1) {
+        return {
+          message: `Growth Mode: You're spending ${needsPercentage.toFixed(0)}% of baseline on needs. Try to stay within baseline ($${(baseline || 0).toFixed(2)}) to maximize your excess for wants and savings.`,
+          emoji: "📊",
+          tone: "text-orange-800"
+        };
+      }
+      
+      return {
+        message: `Growth Mode: Great! You have $${excess.toFixed(2)} excess after baseline. Apply 50/30/20 to this excess: $${(excess * 0.5).toFixed(2)} needs, $${(excess * 0.3).toFixed(2)} wants, $${(excess * 0.2).toFixed(2)} savings.`,
+        emoji: "🚀",
+        tone: "text-green-800"
+      };
+    }
+    
+    // Fallback to original logic if no mode provided
+    const totalIncomeFallback = parseFloat(data.totalMoney) + parseFloat(data.paycheck);
+    const needsPercentageFallback = (data.needs.total / totalIncomeFallback) * 100;
+    const wantsPercentage = (data.wants.total / totalIncomeFallback) * 100;
+    const savingsPercentage = (data.savings.total / totalIncomeFallback) * 100;
 
-    // Analyze spending patterns
-    const isNeedsOver = needsPercentage > 55;
-    const isNeedsUnder = needsPercentage < 45;
-    const isWantsOver = wantsPercentage > 35;
-    const isWantsUnder = wantsPercentage < 25;
-    const isSavingsOver = savingsPercentage > 25;
-    const isSavingsUnder = savingsPercentage < 15;
-
-    // Generate personalized message
     let message = "";
     let emoji = "🎯";
     let tone = "text-blue-800";
 
-    if (isSavingsOver) {
+    if (savingsPercentage > 25) {
       message = `Excellent work! You're saving ${savingsPercentage.toFixed(1)}% of your income, which exceeds your 20% target. This is a great foundation for your financial future!`;
       emoji = "🌟";
       tone = "text-green-800";
-    } else if (isSavingsUnder) {
+    } else if (savingsPercentage < 15) {
       message = `Your savings rate is ${savingsPercentage.toFixed(1)}%, which is below the recommended 20%. Consider setting aside a bit more for your future goals.`;
       emoji = "💡";
       tone = "text-yellow-800";
-    }
-
-    if (isWantsOver) {
+    } else if (wantsPercentage > 35) {
       message = `Your wants category (${wantsPercentage.toFixed(1)}%) is higher than the recommended 30%. Try to identify areas where you can reduce discretionary spending.`;
       emoji = "🎯";
       tone = "text-orange-800";
-    }
-
-    if (isNeedsOver) {
-      message = `Your essential needs (${needsPercentage.toFixed(1)}%) are taking up more than the recommended 50%. Consider reviewing your fixed expenses to find potential savings.`;
+    } else if (needsPercentageFallback > 55) {
+      message = `Your essential needs (${needsPercentageFallback.toFixed(1)}%) are taking up more than the recommended 50%. Consider reviewing your fixed expenses to find potential savings.`;
       emoji = "📊";
       tone = "text-red-800";
-    }
-
-    if (!isNeedsOver && !isWantsOver && !isSavingsUnder) {
+    } else {
       message = `Perfect balance! You're following the 50/30/20 rule closely. Keep up the great work!`;
       emoji = "🎉";
       tone = "text-green-800";
@@ -1155,6 +1326,29 @@ export default function Home() {
   const totalSpent = result ? (result.actual.needs.total + result.actual.wants.total) : 0;
   const totalSaved = result ? result.actual.savings.total : 0;
   const remainingBalance = totalAvailable - totalSpent;
+  
+  // Calculate Financial Health Status (for badges)
+  const getFinancialHealthStatus = () => {
+    if (!result || totalAvailable <= 0) {
+      return { needs: 'gray', wants: 'gray', savings: 'gray' };
+    }
+    
+    const needsTarget = totalAvailable * 0.5;
+    const wantsTarget = totalAvailable * 0.3;
+    const savingsTarget = totalAvailable * 0.2;
+    
+    const needsActual = result.actual.needs.total;
+    const wantsActual = result.actual.wants.total;
+    const savingsActual = result.actual.savings.total;
+    
+    return {
+      needs: needsActual <= needsTarget ? 'green' : 'red',
+      wants: wantsActual <= wantsTarget ? 'green' : 'red',
+      savings: savingsActual >= savingsTarget ? 'green' : 'red' // For savings, >= is good
+    };
+  };
+  
+  const healthStatus = getFinancialHealthStatus();
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -1165,14 +1359,33 @@ export default function Home() {
             💸
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Personalized Budget Planner</h1>
-          <p className="text-lg text-gray-600">Take Control of Your Finances, One Week At a Time</p>
+          <p className="text-lg text-gray-600 mb-3">Take Control of Your Finances, One Week At a Time</p>
+          
+          {/* Verse of the Day - Moved from header card */}
+          {isClient && (
+            <div className="max-w-2xl mx-auto">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <p className="text-sm text-gray-500">📖 Verse of the Day</p>
+                <button
+                  onClick={refreshVerse}
+                  className="p-1 text-gray-500 hover:text-purple-600 transition-colors"
+                  title="Get new verse"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 italic">"{dailyVerse}"</p>
+            </div>
+          )}
         </div>
 
         {/* Top Overview Panel */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {/* Today's Date */}
-            <div className="lg:col-span-1">
+            <div className="text-center md:text-left">
               <p className="text-sm text-gray-600 mb-1">Today's Date</p>
               <p className="text-lg font-semibold text-gray-900">
                 {new Date().toLocaleDateString('en-US', {
@@ -1184,51 +1397,63 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Verse of the Day */}
-            {isClient && (
-              <div className="lg:col-span-1">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-gray-600">📖 Verse of the Day</p>
-                  <button
-                    onClick={refreshVerse}
-                    className="p-1 text-gray-600 hover:text-purple-600 transition-colors"
-                    title="Get new verse"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
-                <p className="text-sm text-gray-700 italic line-clamp-2">"{dailyVerse}"</p>
-              </div>
-            )}
-
-            {/* Total Available Money */}
-            <div className="lg:col-span-1">
-              <p className="text-sm text-gray-600 mb-1">Total Available Money</p>
+            {/* Total Available Money - Centered */}
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-1">Total Available</p>
               <p className="text-2xl font-bold text-blue-600">${totalAvailable.toFixed(2)}</p>
               <p className="text-xs text-gray-500 mt-1">
                 {form.totalMoney && form.paycheck ? (
-                  <>${parseFloat(form.totalMoney).toFixed(2)} + ${parseFloat(form.paycheck).toFixed(2)}</>
+                  <>Starting + Income</>
                 ) : (
                   'Enter starting balance and income'
                 )}
               </p>
             </div>
 
-            {/* Stats Grid */}
-            <div className="lg:col-span-1 grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className="text-xs text-gray-600 mb-1">Spent</p>
-                <p className="text-lg font-semibold text-red-600">${totalSpent.toFixed(2)}</p>
+            {/* Weekly Surplus - Centered */}
+            <div className="text-center md:text-right">
+              <p className="text-sm text-gray-600 mb-1">Weekly Surplus</p>
+              <p className="text-2xl font-bold text-green-600">${remainingBalance.toFixed(2)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {form.totalMoney && form.paycheck ? (
+                  <>Available after expenses</>
+                ) : (
+                  'Enter budget to calculate'
+                )}
+              </p>
+            </div>
+          </div>
+          
+          {/* Financial Health Status Badges - Centered below */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-600 mb-3 text-center">Financial Health Status</p>
+            <div className="flex gap-3 justify-center flex-wrap">
+              <div className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                healthStatus.needs === 'green' 
+                  ? 'bg-green-100 text-green-800 border-2 border-green-300' 
+                  : healthStatus.needs === 'red'
+                  ? 'bg-red-100 text-red-800 border-2 border-red-300'
+                  : 'bg-gray-100 text-gray-600 border-2 border-gray-300'
+              }`}>
+                Needs
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-600 mb-1">Saved</p>
-                <p className="text-lg font-semibold text-green-600">${totalSaved.toFixed(2)}</p>
+              <div className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                healthStatus.wants === 'green' 
+                  ? 'bg-green-100 text-green-800 border-2 border-green-300' 
+                  : healthStatus.wants === 'red'
+                  ? 'bg-red-100 text-red-800 border-2 border-red-300'
+                  : 'bg-gray-100 text-gray-600 border-2 border-gray-300'
+              }`}>
+                Wants
               </div>
-              <div className="text-center">
-                <p className="text-xs text-gray-600 mb-1">Remaining</p>
-                <p className="text-lg font-semibold text-purple-600">${remainingBalance.toFixed(2)}</p>
+              <div className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                healthStatus.savings === 'green' 
+                  ? 'bg-green-100 text-green-800 border-2 border-green-300' 
+                  : healthStatus.savings === 'red'
+                  ? 'bg-red-100 text-red-800 border-2 border-red-300'
+                  : 'bg-gray-100 text-gray-600 border-2 border-gray-300'
+              }`}>
+                Savings
               </div>
             </div>
           </div>
@@ -1303,6 +1528,35 @@ export default function Home() {
                       required
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Weekly Survival Minimum (Baseline)
+                      <span className="text-xs text-gray-500 ml-1">*Required for tiered mode</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="baseline"
+                      value={form.baseline}
+                      onChange={handleChange}
+                      placeholder="Enter your weekly survival minimum"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Your absolute minimum weekly needs (rent, food, utilities, transportation, health, insurance)</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Buffer Goal (Weeks)</label>
+                    <input
+                      type="number"
+                      name="bufferGoalWeeks"
+                      value={form.bufferGoalWeeks}
+                      onChange={handleChange}
+                      placeholder="4"
+                      min="1"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Target number of weeks to build in your buffer (default: 4 weeks)</p>
+                  </div>
                 </div>
               </div>
 
@@ -1334,7 +1588,19 @@ export default function Home() {
               {/* Wants Card */}
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="p-4 bg-green-50 rounded-lg mb-4">
-                  <h3 className="text-lg font-medium text-green-800">Wants (30%)</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium text-green-800">Wants (30%)</h3>
+                    {result && (result.mode === 'survival' || result.mode === 'stable') && (
+                      <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full border border-red-300">
+                        🔒 LOCKED
+                      </span>
+                    )}
+                  </div>
+                  {result && (result.mode === 'survival' || result.mode === 'stable') && (
+                    <p className="text-sm text-red-700 mt-2 italic">
+                      Wants are disabled in {result.mode === 'survival' ? 'Survival' : 'Stable'} mode. All income must go to needs.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-4">
                   {categories.wants.map(({ name, label }) => (
@@ -1348,8 +1614,13 @@ export default function Home() {
                         value={form[name as keyof typeof form]}
                         onChange={handleChange}
                         placeholder={`Enter ${label.toLowerCase()} amount`}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        required
+                        className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors ${
+                          result && (result.mode === 'survival' || result.mode === 'stable') 
+                            ? 'bg-gray-100 cursor-not-allowed' 
+                            : ''
+                        }`}
+                        disabled={result ? (result.mode === 'survival' || result.mode === 'stable') : false}
+                        required={result ? (result.mode === 'growth') : true}
                       />
                     </div>
                   ))}
@@ -1407,10 +1678,10 @@ export default function Home() {
             </form>
           </div>
 
-          {/* RIGHT COLUMN */}
+          {/* RIGHT COLUMN - Weekly Summary Report */}
           {isReportVisible && result && (
             <div className="space-y-6">
-              {/* Results Section */}
+              {/* Weekly Summary Report */}
               <div className="bg-white rounded-xl shadow-md p-6">
                 <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
                   <div className="text-center">
@@ -1422,112 +1693,359 @@ export default function Home() {
                         day: 'numeric'
                       })}
                     </p>
+                    {/* Mode Badge */}
+                    {result.mode && (
+                      <div className="mt-3">
+                        <span className={`inline-block px-4 py-2 rounded-full text-sm font-bold ${
+                          result.mode === 'survival' 
+                            ? 'bg-red-100 text-red-800 border-2 border-red-400' 
+                            : result.mode === 'stable'
+                            ? 'bg-blue-100 text-blue-800 border-2 border-blue-400'
+                            : 'bg-green-100 text-green-800 border-2 border-green-400'
+                        }`}>
+                          {result.mode === 'survival' ? '🛡️ SURVIVAL MODE' : 
+                           result.mode === 'stable' ? '⚖️ STABLE MODE' : 
+                           '🚀 GROWTH MODE'}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-              {form.goalTarget && (
-                <div className="mb-4 p-3 bg-purple-50 rounded">
-                  <h3 className="font-medium text-purple-800 mb-2">Weekly Goal Progress</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Remaining Balance</p>
-                      <p className="text-xl font-bold text-purple-900">
-                        ${(((parseFloat(form.totalMoney) || 0) + (parseFloat(form.paycheck) || 0)) - ((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0))).toFixed(2)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Spent This Week</p>
-                      <p className="text-xl font-bold text-purple-900">${((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0)).toFixed(2)}</p>
+                {form.goalTarget && (
+                  <div className="mb-4 p-3 bg-purple-50 rounded-lg">
+                    <h3 className="font-medium text-purple-800 mb-2">Weekly Goal Progress</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-600">Remaining Balance</p>
+                        <p className="text-xl font-bold text-purple-900">
+                          ${(((parseFloat(form.totalMoney) || 0) + (parseFloat(form.paycheck) || 0)) - ((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0))).toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Total Spent This Week</p>
+                        <p className="text-xl font-bold text-purple-900">${((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0)).toFixed(2)}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h2 className="text-xl font-semibold mb-2">Suggested Budget (50/30/20 Rule)</h2>
-                  <ul className="space-y-1">
-                    <li>🧾 Needs: <strong>${(result?.suggested?.needs?.total || 0).toFixed(2)}</strong></li>
-                    <li>🎈 Wants: <strong>${(result?.suggested?.wants?.total || 0).toFixed(2)}</strong></li>
-                    <li>💰 Savings: <strong>${(result?.suggested?.savings?.total || 0).toFixed(2)}</strong></li>
-                  </ul>
-
-                  <h3 className="mt-4 font-medium">Your Input vs. Suggestion</h3>
-                  <ul className="space-y-1">
-                    <li className="flex justify-between">
-                      <span>Needs Difference:</span>
-                      <span className={getDifferenceColor(result?.comparison?.needsDiff || 0, 'needs')}>
-                        {formatDifference(result?.comparison?.needsDiff || 0, 'needs')}
-                      </span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Wants Difference:</span>
-                      <span className={getDifferenceColor(result?.comparison?.wantsDiff || 0, 'wants')}>
-                        {formatDifference(result?.comparison?.wantsDiff || 0, 'wants')}
-                      </span>
-                    </li>
-                    <li className="flex justify-between">
-                      <span>Savings Difference:</span>
-                      <span className={getDifferenceColor(result?.comparison?.savingsDiff || 0, 'savings')}>
-                        {formatDifference(result?.comparison?.savingsDiff || 0, 'savings')}
-                      </span>
-                    </li>
-                  </ul>
+                {/* Summary Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-600 mb-1">Total Spent</p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      ${((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0)).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Needs + Wants</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-600 mb-1">Total Saved</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      ${(result?.actual?.savings?.total || 0).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {result?.isBufferFilling ? 'Buffer Fill' : 'Savings + Investments'}
+                    </p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <p className="text-sm text-gray-600 mb-1">Remaining</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      ${(((parseFloat(form.totalMoney) || 0) + (parseFloat(form.paycheck) || 0)) - ((result?.actual?.needs?.total || 0) + (result?.actual?.wants?.total || 0) + (result?.actual?.savings?.total || 0))).toFixed(2)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Available Balance</p>
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-center justify-center">
-                  {getChartData() && (
-                    <div className="flex flex-col items-center w-full">
-                      <div className="w-[250px] md:w-[300px] mx-auto">
-                        <Pie data={getChartData()!.data} options={{
-                          ...getChartData()!.options,
-                          plugins: {
-                            ...getChartData()!.options.plugins,
-                            legend: {
-                              ...getChartData()!.options.plugins.legend,
-                              position: 'bottom' as const,
-                              labels: {
-                                ...getChartData()!.options.plugins.legend.labels,
-                                boxWidth: 15,
-                                padding: 15,
-                                font: {
-                                  size: 11
-                                }
-                              }
-                            }
+                {/* 50/30/20 Doughnut Chart */}
+                {(() => {
+                  const needsTotal = result?.actual?.needs?.total || 0;
+                  const wantsTotal = result?.actual?.wants?.total || 0;
+                  const savingsTotal = result?.actual?.savings?.total || 0;
+                  const total = needsTotal + wantsTotal + savingsTotal;
+                  
+                  // Only render if totals are greater than 0
+                  if (total <= 0) {
+                    return null;
+                  }
+                  
+                  // Create chart data inline to ensure reactivity
+                  const chartData = {
+                    labels: ['Needs (50%)', 'Wants (30%)', 'Savings (20%)'],
+                    datasets: [
+                      {
+                        data: [needsTotal, wantsTotal, savingsTotal], // Use live values directly
+                        backgroundColor: [
+                          '#F59E0B', // Needs - Yellow/Orange
+                          '#3B82F6', // Wants - Blue
+                          '#10B981'  // Savings - Green
+                        ],
+                        borderColor: '#ffffff',
+                        borderWidth: 2,
+                      },
+                    ],
+                  };
+
+                  const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                      legend: {
+                        position: 'bottom' as const,
+                        labels: {
+                          font: {
+                            size: 12
+                          },
+                          padding: 15
+                        }
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function(context: any) {
+                            const value = context.raw;
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: $${value.toFixed(2)} (${percentage}%)`;
                           }
-                        }} />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* AI Budget Coach Section */}
-                  <div className="w-full mt-6 -ml-4">
-                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 shadow-sm min-h-[200px]">
-                      <div className="flex items-center mb-4">
-                        <span className="text-3xl mr-3">🧠</span>
-                        <h3 className="text-xl font-semibold text-gray-800">AI Budget Coach</h3>
-                      </div>
-                      {Array.isArray(history) && history.length > 0 && (
-                        <div className="space-y-4">
-                          {(() => {
-                            const latestEntry = history[0];
-                            if (!latestEntry) return null;
-                            const { message, emoji, tone } = getAICoachMessage(latestEntry);
-                            return (
-                              <div className="flex items-start space-x-4">
-                                <span className="text-3xl">{emoji}</span>
-                                <p className={`text-base ${tone} leading-relaxed`}>{message}</p>
-                              </div>
-                            );
-                          })()}
+                        }
+                      }
+                    }
+                  };
+                  
+                  return (
+                    <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                      <h5 className="text-lg font-semibold text-gray-800 mb-4 text-center">Budget Breakdown (50/30/20 Rule)</h5>
+                      <div className="flex justify-center items-center">
+                        <div className="w-full max-w-sm">
+                          <Doughnut data={chartData} options={chartOptions} key={`main-chart-${needsTotal}-${wantsTotal}-${savingsTotal}`} />
                         </div>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
+
+                {/* Super-Size Health Bars - Actual vs Target (Mode-Aware) */}
+                {result && result.projectedTotal > 0 && (() => {
+                  const needsActual = result.actual.needs.total;
+                  const wantsActual = result.actual.wants.total;
+                  const savingsActual = result.actual.savings.total;
+                  
+                  // Mode-specific target calculations
+                  let needsTarget, wantsTarget, savingsTarget;
+                  let needsPercentage, wantsPercentage, savingsPercentage;
+                  
+                  if (result.mode === 'survival' || result.mode === 'stable') {
+                    // In Survival/Stable: Show progress against total income (not percentage)
+                    needsTarget = result.projectedTotal; // All income should go to needs
+                    wantsTarget = 0; // No wants allowed
+                    savingsTarget = 0; // No savings in Survival/Stable
+                    
+                    needsPercentage = (needsActual / needsTarget) * 100;
+                    wantsPercentage = 0;
+                    savingsPercentage = 0;
+                  } else {
+                    // Growth mode: Use baseline + excess calculations
+                    needsTarget = result.baseline + (result.excess * 0.5);
+                    wantsTarget = result.excess * 0.3;
+                    savingsTarget = result.excess * 0.2;
+                    
+                    needsPercentage = needsTarget > 0 ? (needsActual / needsTarget) * 100 : 0;
+                    wantsPercentage = wantsTarget > 0 ? (wantsActual / wantsTarget) * 100 : 0;
+                    savingsPercentage = savingsTarget > 0 ? (savingsActual / savingsTarget) * 100 : 0;
+                  }
+                  
+                  // Dynamic color logic: Green (<80%), Yellow (80-100%), Red (>100%)
+                  const getBarColor = (percentage: number, isSavings: boolean = false) => {
+                    if (isSavings) {
+                      // For savings, higher is better
+                      if (percentage >= 100) return 'bg-green-500';
+                      if (percentage >= 80) return 'bg-yellow-500';
+                      return 'bg-red-500';
+                    } else {
+                      // For needs/wants, lower is better
+                      if (percentage <= 80) return 'bg-green-500';
+                      if (percentage <= 100) return 'bg-yellow-500';
+                      return 'bg-red-500';
+                    }
+                  };
+                  
+                  const needsColor = getBarColor(needsPercentage);
+                  const wantsColor = result.mode === 'survival' || result.mode === 'stable' ? 'bg-gray-400' : getBarColor(wantsPercentage);
+                  const savingsColor = result.mode === 'survival' || result.mode === 'stable' ? 'bg-gray-400' : getBarColor(savingsPercentage, true);
+                  
+                  return (
+                    <div className="space-y-6">
+                      <h5 className="text-lg font-semibold text-gray-800 mb-4">Financial Health Bars</h5>
+                      
+                      {/* Needs Bar */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-semibold text-gray-700">
+                            Needs {result.mode === 'survival' || result.mode === 'stable' 
+                              ? `(Target: $${needsTarget.toFixed(2)})` 
+                              : `(Target: $${needsTarget.toFixed(2)})`}
+                          </span>
+                          <span className="text-sm font-medium text-gray-700">
+                            ${needsActual.toFixed(2)} / ${needsTarget.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="relative w-full bg-gray-200 rounded-full h-8 overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full ${needsColor} transition-all duration-500 rounded-full flex items-center ${
+                              needsPercentage > 20 ? 'justify-end pr-2' : 'justify-start pl-2'
+                            }`}
+                            style={{ width: `${Math.min(needsPercentage, 100)}%` }}
+                          >
+                            {needsPercentage > 20 && (
+                              <span className="text-sm font-bold text-white drop-shadow">
+                                {needsPercentage.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          {needsPercentage <= 20 && (
+                            <span className="absolute inset-0 flex items-center justify-start pl-2 text-sm font-bold text-gray-700">
+                              {needsPercentage.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        {needsActual > needsTarget && (
+                          <p className="text-xs text-red-600 mt-1 font-medium">⚠️ Over target by ${(needsActual - needsTarget).toFixed(2)}</p>
+                        )}
+                      </div>
+                      
+                      {/* Wants Bar */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-semibold text-gray-700">
+                            Wants {result.mode === 'survival' || result.mode === 'stable' 
+                              ? '(LOCKED)' 
+                              : `(Target: $${wantsTarget.toFixed(2)})`}
+                          </span>
+                          <span className="text-sm font-medium text-gray-700">
+                            ${wantsActual.toFixed(2)} / ${wantsTarget.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="relative w-full bg-gray-200 rounded-full h-8 overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full ${wantsColor} transition-all duration-500 rounded-full flex items-center ${
+                              wantsPercentage > 20 ? 'justify-end pr-2' : 'justify-start pl-2'
+                            }`}
+                            style={{ width: `${Math.min(wantsPercentage, 100)}%` }}
+                          >
+                            {wantsPercentage > 20 && (
+                              <span className="text-sm font-bold text-white drop-shadow">
+                                {wantsPercentage.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          {wantsPercentage <= 20 && (
+                            <span className="absolute inset-0 flex items-center justify-start pl-2 text-sm font-bold text-gray-700">
+                              {wantsPercentage.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        {wantsActual > wantsTarget && (
+                          <p className="text-xs text-red-600 mt-1 font-medium">⚠️ Over target by ${(wantsActual - wantsTarget).toFixed(2)}</p>
+                        )}
+                      </div>
+                      
+                      {/* Savings Bar */}
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-sm font-semibold text-gray-700">
+                            {result.isBufferFilling ? 'Buffer Fill' : 'Savings'} 
+                            {result.mode === 'survival' || result.mode === 'stable' 
+                              ? '(LOCKED)' 
+                              : `(Target: $${savingsTarget.toFixed(2)})`}
+                          </span>
+                          <span className="text-sm font-medium text-gray-700">
+                            ${savingsActual.toFixed(2)} / ${savingsTarget.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="relative w-full bg-gray-200 rounded-full h-8 overflow-hidden shadow-inner">
+                          <div 
+                            className={`h-full ${savingsColor} transition-all duration-500 rounded-full flex items-center ${
+                              savingsPercentage > 20 ? 'justify-end pr-2' : 'justify-start pl-2'
+                            }`}
+                            style={{ width: `${Math.min(savingsPercentage, 100)}%` }}
+                          >
+                            {savingsPercentage > 20 && (
+                              <span className="text-sm font-bold text-white drop-shadow">
+                                {savingsPercentage.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          {savingsPercentage <= 20 && (
+                            <span className="absolute inset-0 flex items-center justify-start pl-2 text-sm font-bold text-gray-700">
+                              {savingsPercentage.toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        {savingsActual < savingsTarget && (
+                          <p className="text-xs text-red-600 mt-1 font-medium">⚠️ Under target by ${(savingsTarget - savingsActual).toFixed(2)}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
-            </div>
+
+              {/* AI Budget Coach Card */}
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <div className="flex items-center mb-4">
+                  <span className="text-3xl mr-3">🧠</span>
+                  <h3 className="text-xl font-semibold text-gray-800">AI Budget Coach</h3>
+                </div>
+                {(Array.isArray(history) && history.length > 0) || result ? (
+                  <div className="space-y-4">
+                    {(() => {
+                      // Use current result if available, otherwise use latest history entry
+                      if (result) {
+                        // Create a temporary entry from current result for AI coach
+                        const tempEntry: BudgetEntry = {
+                          date: form.date,
+                          totalMoney: form.totalMoney || "0",
+                          paycheck: form.paycheck || "0",
+                          needs: result.actual.needs,
+                          wants: result.actual.wants,
+                          savings: result.actual.savings,
+                          goalTarget: form.goalTarget || "",
+                          notes: form.notes || undefined,
+                          tags: form.tags || [],
+                          recurringExpenses: [],
+                          verse: undefined
+                        };
+                        const { message, emoji, tone } = getAICoachMessage(
+                          tempEntry, 
+                          result.mode, 
+                          result.baseline
+                        );
+                        return (
+                          <div className="flex items-start space-x-4">
+                            <span className="text-3xl">{emoji}</span>
+                            <p className={`text-base ${tone} leading-relaxed`}>{message}</p>
+                          </div>
+                        );
+                      } else if (history && history.length > 0) {
+                        const latestEntry = history[0];
+                        if (!latestEntry) return null;
+                        const { message, emoji, tone } = getAICoachMessage(latestEntry);
+                        return (
+                          <div className="flex items-start space-x-4">
+                            <span className="text-3xl">{emoji}</span>
+                            <p className={`text-base ${tone} leading-relaxed`}>{message}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">Complete a budget calculation to get personalized coaching advice!</p>
+                )}
+                {(!history || history.length === 0) && (
+                  <p className="text-gray-500 italic">Complete a budget calculation to get personalized coaching advice!</p>
+                )}
+              </div>
             </div>
           )}
         </div>
